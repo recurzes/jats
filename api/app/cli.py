@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.auth.device import register_device
+from app.classifier.llm import chat_json
 from app.config import get_settings
 from app.db import SessionLocal
 from app.gmail.client import get_email_address, get_gmail_service, list_message_ids
@@ -61,6 +62,10 @@ def sync(db: Session) -> None:
         print(run.error)
 
 
+def llm_ping() -> None:
+    print(chat_json("Answer with JSON only.", 'Return the JSON object {"ok": true}.'))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -74,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("gmail-address", help="Ask Gmail for the connected address")
     commands.add_parser("gmail-count", help="Count the messages of the last 7 days")
     commands.add_parser("sync", help="Run one Gmail sync now")
+    commands.add_parser("llm-ping", help="Ask the AI provider for a one-line reply")
 
     return parser
 
@@ -88,6 +94,8 @@ def run(argv: Sequence[str] | None, db: Session) -> None:
         gmail_address(db)
     elif args.command == "gmail-count":
         gmail_count(db)
+    elif args.command == "llm-ping":
+        llm_ping()
     else:
         sync(db)
 

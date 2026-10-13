@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     sync_interval_minutes: int = Field(default=5, ge=1)
     scheduler_enabled: bool = True
 
+    # Any OpenAI-compatible provider. An empty base URL means OpenAI itself.
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
+    llm_timeout_seconds: float = Field(default=30, gt=0)
+
     receipt_width: int = 32  # characters per line on 58 mm paper
     lease_seconds: int = 60
     max_attempts: int = 5

@@ -1,5 +1,6 @@
 import pytest
 from gmail_fake import FakeGmail, message
+from llm_fake import use_llm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -99,3 +100,13 @@ def test_sync_stores_emails_and_running_it_twice_adds_no_duplicates(
 def test_gmail_commands_without_an_account(db: Session, command: str) -> None:
     with pytest.raises(SystemExit, match="No Gmail account"):
         cli.run([command], db)
+
+
+def test_llm_ping_prints_the_reply(
+    db: Session, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    use_llm(monkeypatch, '{"ok": true}')
+
+    cli.run(["llm-ping"], db)
+
+    assert capsys.readouterr().out.strip() == '{"ok": true}'

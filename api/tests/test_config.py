@@ -56,3 +56,27 @@ def test_sync_interval_must_be_at_least_a_minute(monkeypatch: pytest.MonkeyPatch
             get_settings()
     finally:
         get_settings.cache_clear()
+
+
+def test_llm_settings_have_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL", "LLM_TIMEOUT_SECONDS"):
+        monkeypatch.delenv(name)
+
+    settings = Settings(_env_file=None)
+
+    assert (settings.llm_base_url, settings.llm_api_key, settings.llm_model) == ("", "", "")
+    assert settings.llm_timeout_seconds == 30
+
+
+def test_llm_settings_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_BASE_URL", "https://llm.example/v1")
+    monkeypatch.setenv("LLM_API_KEY", "key")
+    monkeypatch.setenv("LLM_MODEL", "small-model")
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "10")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.llm_base_url == "https://llm.example/v1"
+    assert settings.llm_api_key == "key"
+    assert settings.llm_model == "small-model"
+    assert settings.llm_timeout_seconds == 10

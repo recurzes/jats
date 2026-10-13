@@ -7,3 +7,6 @@ web/.idea
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+
+# Real emails for the classifier eval hold personal data.
+api/tests/fixtures/classifier/local/

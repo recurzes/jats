@@ -18,6 +18,10 @@ os.environ["GOOGLE_REDIRECT_URI"] = "http://localhost:8000/auth/google/callback"
 os.environ["FRONTEND_URL"] = "http://localhost:5173"
 os.environ["SYNC_INTERVAL_MINUTES"] = "5"
 os.environ["SCHEDULER_ENABLED"] = "false"
+os.environ["LLM_BASE_URL"] = "http://llm.invalid/v1"
+os.environ["LLM_API_KEY"] = "test-llm-key"
+os.environ["LLM_MODEL"] = "test-model"
+os.environ["LLM_TIMEOUT_SECONDS"] = "30"
 
 from collections.abc import Callable  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402
