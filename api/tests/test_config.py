@@ -80,3 +80,23 @@ def test_llm_settings_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> 
     assert settings.llm_api_key == "key"
     assert settings.llm_model == "small-model"
     assert settings.llm_timeout_seconds == 10
+
+
+def test_classification_settings_have_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("REVIEW_THRESHOLD")
+    monkeypatch.delenv("MAX_CLASSIFICATIONS_PER_RUN")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.review_threshold == 0.6
+    assert settings.max_classifications_per_run == 30
+
+
+def test_classification_settings_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REVIEW_THRESHOLD", "0.8")
+    monkeypatch.setenv("MAX_CLASSIFICATIONS_PER_RUN", "5")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.review_threshold == 0.8
+    assert settings.max_classifications_per_run == 5

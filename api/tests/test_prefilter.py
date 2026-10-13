@@ -32,6 +32,11 @@ def test_other_emails_are_not_candidates(from_domain: str, subject: str) -> None
     assert not is_candidate(from_domain, subject)
 
 
+def test_a_reply_from_an_unknown_domain_in_a_known_thread_is_a_candidate() -> None:
+    assert not is_candidate("gmail.com", "Re: quick question")
+    assert is_candidate("gmail.com", "Re: quick question", in_known_thread=True)
+
+
 @pytest.mark.parametrize("domain", JOB_BOARD_DOMAINS)
 def test_every_listed_job_board_is_a_candidate(domain: str) -> None:
     assert is_candidate(domain, "")

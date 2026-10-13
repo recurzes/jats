@@ -22,6 +22,9 @@ os.environ["LLM_BASE_URL"] = "http://llm.invalid/v1"
 os.environ["LLM_API_KEY"] = "test-llm-key"
 os.environ["LLM_MODEL"] = "test-model"
 os.environ["LLM_TIMEOUT_SECONDS"] = "30"
+os.environ["REVIEW_THRESHOLD"] = "0.6"
+# Off, so a sync in a test never reaches for the AI. The pipeline tests turn it on with a fake.
+os.environ["MAX_CLASSIFICATIONS_PER_RUN"] = "0"
 
 from collections.abc import Callable  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402

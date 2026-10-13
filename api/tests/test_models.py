@@ -5,6 +5,8 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.applications.models import Application, EventSource, StatusEvent
+from app.classifier.schema import Status
 from app.gmail.models import AccountState, Email, GmailAccount, SyncResult, SyncRun, SyncTrigger
 from app.printing.models import Device, JobState, PrintJob
 
@@ -169,6 +171,136 @@ def test_sync_run_accepts_every_result(db: Session, result: SyncResult) -> None:
 @pytest.mark.parametrize("fields", [{"trigger": "cron"}, {"trigger": "manual", "result": "fine"}])
 def test_sync_run_rejects_unknown_values(db: Session, fields: dict[str, str]) -> None:
     db.add(SyncRun(**fields))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def new_application(**fields: object) -> Application:
+    values = {"user_id": uuid.uuid4(), "company": "Acme Corp", "company_key": "acme"}
+    return Application(**(values | {"status": Status.ACKNOWLEDGED} | fields))
+
+
+@pytest.fixture
+def application(db: Session) -> Application:
+    application = new_application()
+    db.add(application)
+    db.commit()
+    return application
+
+
+def test_insert_application_uses_defaults(db: Session, application: Application) -> None:
+    saved = db.get(Application, application.id)
+    assert saved.needs_review is False
+    assert saved.role is None
+    assert saved.thread_id is None
+    assert saved.first_seen_at is not None
+    assert saved.last_event_at is not None
+
+
+@pytest.mark.parametrize("status", list(Status))
+def test_application_accepts_every_status(db: Session, status: Status) -> None:
+    application = new_application(status=status)
+    db.add(application)
+    db.commit()
+
+    assert db.get(Application, application.id).status == status
+
+
+def test_application_rejects_an_unknown_status(db: Session) -> None:
+    db.add(new_application(status="hired"))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_email_links_to_an_application(
+    db: Session, account: GmailAccount, application: Application
+) -> None:
+    row = email(account, application_id=application.id)
+    db.add(row)
+    db.commit()
+
+    assert db.get(Email, row.id).application_id == application.id
+
+
+def test_email_needs_an_existing_application(db: Session, account: GmailAccount) -> None:
+    db.add(email(account, application_id=uuid.uuid4()))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def event(application: Application, **fields: object) -> StatusEvent:
+    values = {"application_id": application.id, "to_status": Status.REJECTED}
+    return StatusEvent(**(values | {"source": EventSource.AI} | fields))
+
+
+def test_insert_status_event(db: Session, account: GmailAccount, application: Application) -> None:
+    row = email(account)
+    db.add(row)
+    db.flush()
+    saved = event(application, email_id=row.id, from_status=Status.ACKNOWLEDGED)
+    db.add(saved)
+    db.commit()
+
+    saved = db.get(StatusEvent, saved.id)
+    assert (saved.from_status, saved.to_status) == (Status.ACKNOWLEDGED, Status.REJECTED)
+    assert saved.source == EventSource.AI
+    assert saved.created_at is not None
+
+
+def test_one_email_causes_at_most_one_event(
+    db: Session, account: GmailAccount, application: Application
+) -> None:
+    row = email(account)
+    db.add(row)
+    db.flush()
+    db.add(event(application, email_id=row.id))
+    db.add(event(application, email_id=row.id, to_status=Status.REPLIED))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_manual_events_need_no_email(db: Session, application: Application) -> None:
+    db.add(event(application, source=EventSource.MANUAL))
+    db.add(event(application, source=EventSource.MANUAL, to_status=Status.REPLIED))
+    db.commit()
+
+    assert db.query(StatusEvent).filter_by(email_id=None).count() == 2
+
+
+def test_status_event_rejects_an_unknown_source(db: Session, application: Application) -> None:
+    db.add(event(application, source="robot"))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_one_status_event_creates_at_most_one_print_job(
+    db: Session, application: Application
+) -> None:
+    saved = event(application)
+    db.add(saved)
+    db.flush()
+    db.add(PrintJob(payload={}, status_event_id=saved.id))
+    db.add(PrintJob(payload={}, status_event_id=saved.id))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_print_jobs_without_an_event_are_not_limited(db: Session) -> None:
+    db.add(PrintJob(payload={}))
+    db.add(PrintJob(payload={}))
+    db.commit()
+
+    assert db.query(PrintJob).filter_by(status_event_id=None).count() == 2
+
+
+def test_print_job_needs_an_existing_status_event(db: Session) -> None:
+    db.add(PrintJob(payload={}, status_event_id=uuid.uuid4()))
 
     with pytest.raises(IntegrityError):
         db.commit()

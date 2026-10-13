@@ -110,7 +110,7 @@ uv run python -m app.cli llm-ping         # asks the provider for a one-line rep
 
 The provider gets the sender, the subject, the date and at most 3,000 characters of the body, wrapped in `<email>` tags; the prompt in [app/classifier/prompts.py](app/classifier/prompts.py) tells the model that text is data, not instructions. The answer is validated against [app/classifier/schema.py](app/classifier/schema.py): `is_job_related`, `company`, `role`, `status` (`acknowledged`, `replied`, `update` or `rejected`) and `confidence` from 0 to 1. An answer that fails validation is asked for once more, then given up on.
 
-`classify_and_store()` saves the result on the `emails` row:
+`classify_and_store()` puts the result on the `emails` row, and the sync commits it together with what the result changes:
 
 | Outcome | What is saved |
 | --- | --- |
@@ -119,6 +119,27 @@ The provider gets the sender, the subject, the date and at most 3,000 characters
 | Provider down or key refused (`LLMUnavailable`, `LLMAuthError`) | Nothing; the error is raised to the caller |
 
 The API key, the email text and the provider's answers are never logged.
+
+## Applications and auto-print
+
+Every sync ends by sending the waiting candidates to the AI, oldest first, and applying each answer with `apply_classification()` in [app/applications/service.py](app/applications/service.py). The email, its application, the status event and the print job are saved in one transaction.
+
+1. An email that is not about a job is marked processed and nothing else happens.
+2. The application is found by Gmail thread first, then by company name among the applications that are not `rejected`. Company names are compared through `normalize_company()`, so `Acme Corp.` and `ACME, Inc.` are the same company. No match creates a new application.
+3. The status changes unless it is the same status again, or an `acknowledged` arriving after any other status (a late auto-reply). A change is recorded as a `status_events` row.
+4. Each change queues one receipt for the ESP32.
+
+A result with confidence below `REVIEW_THRESHOLD` (default 0.6), or for an application with no company (it is named `Unknown`), sets `needs_review` and prints nothing. The status change is still recorded.
+
+An email in a thread that already has an application is always a candidate, whatever its sender and subject, so a recruiter replying from a personal address is not missed.
+
+| Limit | What happens |
+| --- | --- |
+| `MAX_CLASSIFICATIONS_PER_RUN` (default 30) | A sync makes at most this many AI calls and leaves the rest for the next one. `0` turns classification off |
+| 3 attempts | An email the AI cannot classify is tried on three syncs, its body read from Gmail again each time. Then it is marked processed with `classification = {"error": "..."}` and a warning is logged |
+| Provider down or key refused | The sync stops classifying and its `sync_runs` row is an `error`. The emails are already stored, no attempt is counted, and the next sync picks them up |
+
+Three database rules stop anything being written twice: `emails.gmail_message_id` is unique, an email has at most one status event, and a status event has at most one print job.
 
 ### Accuracy
 
@@ -178,6 +199,6 @@ The deploy job is skipped until the repo variable `DEPLOY_ENABLED` is `true`. Se
 | Secret | `MIGRATION_DATABASE_URL` | production database URL, starting `postgresql+psycopg://` |
 | Variable | `HEALTH_URL` | `https://<api-domain>/health` |
 
-In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `FRONTEND_URL`, `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` set as env vars. `SYNC_INTERVAL_MINUTES`, `SCHEDULER_ENABLED` and `LLM_TIMEOUT_SECONDS` are optional.
+In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `FRONTEND_URL`, `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` set as env vars. `SYNC_INTERVAL_MINUTES`, `SCHEDULER_ENABLED`, `LLM_TIMEOUT_SECONDS`, `REVIEW_THRESHOLD` and `MAX_CLASSIFICATIONS_PER_RUN` are optional.
 
 To roll back: Actions > api > Run workflow, and put an older tag such as `sha-<commit>` in `rollback_tag`.
