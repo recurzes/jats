@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.gmail.models import AccountState, GmailAccount
 from app.printing.models import Device, JobState, PrintJob
 
 
@@ -42,6 +43,40 @@ def test_insert_print_job_uses_defaults(db: Session) -> None:
 
 def test_print_job_rejects_an_unknown_state(db: Session) -> None:
     db.add(PrintJob(payload={}, state="lost"))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def gmail_account(user_id: uuid.UUID, **fields: object) -> GmailAccount:
+    return GmailAccount(
+        user_id=user_id, email_address="me@example.com", refresh_token_enc="enc", **fields
+    )
+
+
+def test_insert_gmail_account_uses_defaults(db: Session) -> None:
+    account = gmail_account(uuid.uuid4())
+    db.add(account)
+    db.commit()
+
+    saved = db.get(GmailAccount, account.id)
+    assert saved.state == AccountState.OK
+    assert saved.history_id is None
+    assert saved.last_error is None
+    assert saved.connected_at is not None
+
+
+def test_one_gmail_account_per_user(db: Session) -> None:
+    user_id = uuid.uuid4()
+    db.add(gmail_account(user_id))
+    db.add(gmail_account(user_id))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_gmail_account_rejects_an_unknown_state(db: Session) -> None:
+    db.add(gmail_account(uuid.uuid4(), state="broken"))
 
     with pytest.raises(IntegrityError):
         db.commit()

@@ -10,6 +10,12 @@ os.environ["DATABASE_URL"] = os.environ.get(
 os.environ["NEON_AUTH_BASE_URL"] = "https://ep-test.neonauth.example.com/neondb/auth"
 os.environ["OWNER_USER_ID"] = "11111111-1111-1111-1111-111111111111"
 os.environ["CORS_ORIGINS"] = "http://localhost:5173, https://jats.example.com"
+os.environ["TOKEN_ENC_KEY"] = "dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktMTIzNDU="  # a Fernet key
+os.environ["STATE_SECRET"] = "test-state-secret-that-is-long-enough-to-sign"
+os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
+os.environ["GOOGLE_CLIENT_SECRET"] = "test-client-secret"
+os.environ["GOOGLE_REDIRECT_URI"] = "http://localhost:8000/auth/google/callback"
+os.environ["FRONTEND_URL"] = "http://localhost:5173"
 
 from collections.abc import Callable  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402
