@@ -1,7 +1,7 @@
 import uuid
 from functools import lru_cache
 
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/auth/google/callback"
     # Where the Google callback sends the browser back to.
     frontend_url: str = "http://localhost:5173"
+
+    # The in-process scheduler runs a Gmail sync this often. Tests turn the scheduler off.
+    sync_interval_minutes: int = Field(default=5, ge=1)
+    scheduler_enabled: bool = True
 
     receipt_width: int = 32  # characters per line on 58 mm paper
     lease_seconds: int = 60

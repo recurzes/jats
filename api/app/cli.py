@@ -4,14 +4,14 @@ import argparse
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.device import register_device
 from app.config import get_settings
 from app.db import SessionLocal
-from app.gmail.client import get_email_address, get_gmail_service
-from app.gmail.models import GmailAccount
+from app.gmail.client import get_email_address, get_gmail_service, list_message_ids
+from app.gmail.models import GmailAccount, SyncTrigger
+from app.gmail.sync import find_account, run_sync
 from app.printing import queue
 from app.printing.receipt import render_status_receipt
 
@@ -38,13 +38,27 @@ def enqueue_test(db: Session, status: str) -> None:
     print(f"Queued print job {job.id} ({job.state})")
 
 
-def gmail_address(db: Session) -> None:
-    account = db.scalar(
-        select(GmailAccount).where(GmailAccount.user_id == get_settings().owner_user_id)
-    )
+def _gmail_account(db: Session) -> GmailAccount:
+    account = find_account(db, get_settings().owner_user_id)
     if account is None:
         raise SystemExit("No Gmail account is connected yet")
-    print(get_email_address(get_gmail_service(account)))
+    return account
+
+
+def gmail_address(db: Session) -> None:
+    print(get_email_address(get_gmail_service(_gmail_account(db))))
+
+
+def gmail_count(db: Session) -> None:
+    ids = list_message_ids(get_gmail_service(_gmail_account(db)))
+    print(f"{len(ids)} messages in the last 7 days")
+
+
+def sync(db: Session) -> None:
+    run = run_sync(db, _gmail_account(db), SyncTrigger.MANUAL)
+    print(f"Sync {run.result}: {run.emails_seen} seen, {run.emails_new} new")
+    if run.error:
+        print(run.error)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -58,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     test_job.add_argument("--status", default="REJECTED")
 
     commands.add_parser("gmail-address", help="Ask Gmail for the connected address")
+    commands.add_parser("gmail-count", help="Count the messages of the last 7 days")
+    commands.add_parser("sync", help="Run one Gmail sync now")
 
     return parser
 
@@ -68,8 +84,12 @@ def run(argv: Sequence[str] | None, db: Session) -> None:
         create_device(db, args.name)
     elif args.command == "enqueue-test":
         enqueue_test(db, args.status)
-    else:
+    elif args.command == "gmail-address":
         gmail_address(db)
+    elif args.command == "gmail-count":
+        gmail_count(db)
+    else:
+        sync(db)
 
 
 def main() -> None:
