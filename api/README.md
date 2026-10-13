@@ -100,6 +100,34 @@ uv run python -m app.cli sync             # runs one sync now and prints the cou
 
 The advisory lock needs a direct database connection, not Neon's pooled one (see `.env.example`).
 
+## Classifier
+
+Candidate emails are classified by an AI provider, through one OpenAI-compatible client: set `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL`, and swap providers by changing only those. The provider has to support JSON mode (`response_format: json_object`). A call waits `LLM_TIMEOUT_SECONDS` (default 30) and is retried once, 2 seconds later, on a 429, a 5xx or a timeout.
+
+```sh
+uv run python -m app.cli llm-ping         # asks the provider for a one-line reply
+```
+
+The provider gets the sender, the subject, the date and at most 3,000 characters of the body, wrapped in `<email>` tags; the prompt in [app/classifier/prompts.py](app/classifier/prompts.py) tells the model that text is data, not instructions. The answer is validated against [app/classifier/schema.py](app/classifier/schema.py): `is_job_related`, `company`, `role`, `status` (`acknowledged`, `replied`, `update` or `rejected`) and `confidence` from 0 to 1. An answer that fails validation is asked for once more, then given up on.
+
+`classify_and_store()` saves the result on the `emails` row:
+
+| Outcome | What is saved |
+| --- | --- |
+| Classified | `classification` (the JSON), `confidence` and `processed_at`. An email with `processed_at` is never sent to the AI again |
+| No valid answer after the retry, or the provider refused the request (a 4xx) | `classification_attempts` goes up by one; `processed_at` stays empty |
+| Provider down or key refused (`LLMUnavailable`, `LLMAuthError`) | Nothing; the error is raised to the caller |
+
+The API key, the email text and the provider's answers are never logged.
+
+### Accuracy
+
+```sh
+uv run python -m scripts.eval_classifier  # calls the real provider, once per email
+```
+
+It classifies every email in the JSON files under [tests/fixtures/classifier/](tests/fixtures/classifier/) and prints the accuracy and each miss; the target is 85%. `synthetic.json` has 20 made-up emails. Put real ones in `tests/fixtures/classifier/local/*.json`, in the same format with `"expected"` set to a status or `null` for mail that is not job related. That folder is gitignored, because real emails hold personal data.
+
 ## Checks
 
 ```sh
@@ -150,6 +178,6 @@ The deploy job is skipped until the repo variable `DEPLOY_ENABLED` is `true`. Se
 | Secret | `MIGRATION_DATABASE_URL` | production database URL, starting `postgresql+psycopg://` |
 | Variable | `HEALTH_URL` | `https://<api-domain>/health` |
 
-In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` and `FRONTEND_URL` set as env vars. `SYNC_INTERVAL_MINUTES` and `SCHEDULER_ENABLED` are optional.
+In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `FRONTEND_URL`, `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` set as env vars. `SYNC_INTERVAL_MINUTES`, `SCHEDULER_ENABLED` and `LLM_TIMEOUT_SECONDS` are optional.
 
 To roll back: Actions > api > Run workflow, and put an older tag such as `sha-<commit>` in `rollback_tag`.
