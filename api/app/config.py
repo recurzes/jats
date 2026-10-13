@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     llm_model: str = ""
     llm_timeout_seconds: float = Field(default=30, gt=0)
 
+    # A result less confident than this is flagged for review and not printed.
+    review_threshold: float = Field(default=0.6, ge=0, le=1)
+    # AI calls one sync may make; the rest wait for the next run. 0 turns classification off.
+    max_classifications_per_run: int = Field(default=30, ge=0)
+
     receipt_width: int = 32  # characters per line on 58 mm paper
     lease_seconds: int = 60
     max_attempts: int = 5

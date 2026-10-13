@@ -57,7 +57,10 @@ def gmail_count(db: Session) -> None:
 
 def sync(db: Session) -> None:
     run = run_sync(db, _gmail_account(db), SyncTrigger.MANUAL)
-    print(f"Sync {run.result}: {run.emails_seen} seen, {run.emails_new} new")
+    print(
+        f"Sync {run.result}: {run.emails_seen} seen, {run.emails_new} new, "
+        f"{run.emails_classified} classified"
+    )
     if run.error:
         print(run.error)
 
