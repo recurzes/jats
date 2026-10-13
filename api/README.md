@@ -19,6 +19,25 @@ uv run uvicorn app.main:app --reload
 
 `/health` is the liveness check and `/docs` has the OpenAPI UI.
 
+## Device and print queue
+
+```sh
+uv run python -m app.cli create-device "desk-esp32"     # prints the device key once
+uv run python -m app.cli enqueue-test --status REJECTED # queues a sample receipt
+```
+
+Both commands use `DATABASE_URL`, so point it at production to register the real ESP32.
+
+The ESP32 sends its key in the `X-Device-Key` header and only uses these three endpoints:
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| GET | `/device/jobs/next` | Claims the oldest waiting job and returns its receipt lines, or 204 |
+| POST | `/device/jobs/{id}/ack` | Marks the job printed; safe to repeat |
+| POST | `/device/jobs/{id}/fail` | Body `{"reason": "bt_connect" \| "out_of_paper" \| "print_error" \| "other"}`; requeues the job |
+
+A claimed job that is never acked returns to the queue after `LEASE_SECONDS`. After `MAX_ATTEMPTS` claims it is marked `failed`.
+
 ## Checks
 
 ```sh

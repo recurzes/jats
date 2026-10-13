@@ -13,8 +13,11 @@ from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app.auth.device import generate_device_key, hash_device_key  # noqa: E402
+from app.config import get_settings  # noqa: E402
 from app.db import engine, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.printing.models import Device  # noqa: E402
 
 API_DIR = Path(__file__).resolve().parent.parent
 
@@ -49,3 +52,24 @@ def client(db: Session) -> Iterator[TestClient]:
             yield test_client
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def device_key(db: Session) -> str:
+    """The key of a device that exists in the database."""
+    key = generate_device_key()
+    db.add(
+        Device(user_id=get_settings().owner_user_id, name="test", key_hash=hash_device_key(key))
+    )
+    db.commit()
+    return key
+
+
+@pytest.fixture
+def device(db: Session, device_key: str) -> Device:
+    return db.query(Device).filter_by(key_hash=hash_device_key(device_key)).one()
+
+
+@pytest.fixture
+def device_headers(device_key: str) -> dict[str, str]:
+    return {"X-Device-Key": device_key}
