@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -46,8 +46,10 @@ class PrintJob(Base):
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     printed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_reason: Mapped[str | None] = mapped_column(String(100))
-    # Gets its foreign key and unique index once status_events exists.
-    status_event_id: Mapped[uuid.UUID | None]
+    # The status change this receipt is for. Empty for test jobs and reprints.
+    status_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("status_events.id", name="fk_print_jobs_status_event_id")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
@@ -55,4 +57,11 @@ class PrintJob(Base):
             "state IN ('pending', 'claimed', 'printed', 'failed')", name="ck_print_jobs_state"
         ),
         Index("ix_print_jobs_state_created_at", "state", "created_at"),
+        # One status event creates at most one print job. Reprints have no event.
+        Index(
+            "ix_print_jobs_status_event_id",
+            "status_event_id",
+            unique=True,
+            postgresql_where=text("status_event_id IS NOT NULL"),
+        ),
     )

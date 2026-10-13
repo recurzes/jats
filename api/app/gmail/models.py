@@ -60,12 +60,17 @@ class Email(Base):
     confidence: Mapped[float | None]
     classification_attempts: Mapped[int] = mapped_column(default=0, server_default="0")
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The application this email was matched to. Empty for mail that is not about a job.
+    application_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("applications.id", name="fk_emails_application_id")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         # What stops the same message being written twice.
         Index("ix_emails_gmail_message_id", "gmail_message_id", unique=True),
         Index("ix_emails_thread_id", "thread_id"),
+        Index("ix_emails_application_id", "application_id"),
     )
 
 

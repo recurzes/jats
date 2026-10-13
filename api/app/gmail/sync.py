@@ -1,4 +1,5 @@
-"""The sync loop: new Gmail messages become `emails` rows, one `sync_runs` row per run."""
+"""The sync loop: new Gmail messages become `emails` rows, and the candidates among them are
+classified and applied to their applications. One `sync_runs` row per run."""
 
 import logging
 import uuid
@@ -8,10 +9,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.applications.matcher import find_by_thread
+from app.applications.service import apply_classification
+from app.classifier.llm import LLMError
 from app.classifier.prefilter import is_candidate
+from app.classifier.service import ClassificationFailed, classify_and_store
 from app.config import get_settings
 from app.db import SessionLocal, engine
 from app.gmail.client import (
@@ -23,17 +28,21 @@ from app.gmail.client import (
     list_new_message_ids_since,
 )
 from app.gmail.models import AccountState, Email, GmailAccount, SyncResult, SyncRun, SyncTrigger
-from app.gmail.parse import fetch_message
+from app.gmail.parse import ParsedEmail, fetch_message
 
 logger = logging.getLogger(__name__)
 
 SYNC_LOCK_KEY = 0x6A617473  # "jats" in ASCII
+
+# An email the AI cannot classify is tried on this many syncs, then given up on.
+MAX_CLASSIFICATION_ATTEMPTS = 3
 
 
 @dataclass
 class _Counts:
     seen: int = 0
     new: int = 0
+    classified: int = 0
 
 
 @contextmanager
@@ -79,6 +88,9 @@ def _sync(db: Session, account: GmailAccount, counts: _Counts) -> SyncResult:
     ids, history_id, fell_back = _list_ids(service, account)
     counts.seen = len(ids)
 
+    budget = get_settings().max_classifications_per_run
+    # Bodies are never stored, so the ones just fetched are kept here for the classifier.
+    fetched: dict[str, ParsedEmail] = {}
     stored = set(db.scalars(select(Email.gmail_message_id).where(Email.gmail_message_id.in_(ids))))
     for message_id in ids:
         if message_id in stored:
@@ -86,7 +98,11 @@ def _sync(db: Session, account: GmailAccount, counts: _Counts) -> SyncResult:
         parsed = fetch_message(service, message_id)
         if parsed is None:
             continue
-        # parsed.body stays in memory: it is for the classifier and is never stored.
+        candidate = is_candidate(
+            parsed.from_domain,
+            parsed.subject,
+            in_known_thread=find_by_thread(db, parsed.thread_id) is not None,
+        )
         db.add(
             Email(
                 account_id=account_id,
@@ -97,16 +113,118 @@ def _sync(db: Session, account: GmailAccount, counts: _Counts) -> SyncResult:
                 subject=parsed.subject,
                 snippet=parsed.snippet,
                 received_at=parsed.received_at,
-                is_candidate=is_candidate(parsed.from_domain, parsed.subject),
+                is_candidate=candidate,
             )
         )
         db.commit()
         counts.new += 1
+        if candidate and len(fetched) < budget:
+            fetched[parsed.gmail_message_id] = parsed
 
     # Only after every row is committed: a crash before this re-reads mail instead of losing it.
     account.history_id = history_id
     db.commit()
+
+    _classify_candidates(db, service, account_id, fetched, budget, counts)
     return SyncResult.FALLBACK_FULL if fell_back else SyncResult.OK
+
+
+def _next_candidate(db: Session, account_id: uuid.UUID, tried: list[uuid.UUID]) -> Email | None:
+    """The oldest candidate still waiting for the AI: new, left over by the cap, or a retry."""
+    return db.scalar(
+        select(Email)
+        .where(
+            Email.account_id == account_id,
+            Email.is_candidate,
+            Email.processed_at.is_(None),
+            Email.classification_attempts < MAX_CLASSIFICATION_ATTEMPTS,
+            Email.id.not_in(tried),
+        )
+        .order_by(Email.received_at, Email.gmail_message_id)
+        .limit(1)
+    )
+
+
+def _give_up(db: Session, email: Email, reason: str) -> None:
+    """Mark the email processed without a classification, so it is never tried again."""
+    email.classification = {"error": reason}
+    email.processed_at = datetime.now(UTC)
+    db.commit()
+    logger.warning(
+        "Gave up classifying an email",
+        extra={
+            "data": {
+                "gmail_message_id": email.gmail_message_id,
+                "attempts": email.classification_attempts,
+                "reason": reason,
+            }
+        },
+    )
+
+
+def _classify_and_apply(db: Session, email: Email, parsed: ParsedEmail) -> str | None:
+    """Classify one email and apply the result, in one transaction.
+
+    Returns why it failed, or None when the email is done. A failure counts one attempt.
+    """
+    message_id = email.gmail_message_id
+    try:
+        result = classify_and_store(db, email, parsed)
+        if isinstance(result, ClassificationFailed):
+            db.commit()
+            return result.reason
+        if result is not None and apply_classification(db, email, result) is not None:
+            # The thread has an application now, so its mail the prefilter turned down counts.
+            db.execute(
+                update(Email)
+                .where(
+                    Email.thread_id == email.thread_id,
+                    Email.is_candidate.is_(False),
+                    Email.processed_at.is_(None),
+                )
+                .values(is_candidate=True)
+            )
+        db.commit()
+        return None
+    except LLMError:
+        # The provider is down or refuses the key. That is not this email's fault.
+        raise
+    except Exception as exc:
+        # One bad email must never block the others.
+        db.rollback()
+        logger.exception(
+            "Could not process a classified email", extra={"data": {"gmail_message_id": message_id}}
+        )
+        email.classification_attempts += 1
+        db.commit()
+        return f"Could not apply the classification ({type(exc).__name__})"
+
+
+def _classify_candidates(
+    db: Session,
+    service: Any,
+    account_id: uuid.UUID,
+    fetched: dict[str, ParsedEmail],
+    budget: int,
+    counts: _Counts,
+) -> None:
+    """Send waiting candidates to the AI, oldest first, until the run's budget is spent."""
+    tried: list[uuid.UUID] = []
+    while budget > 0 and (email := _next_candidate(db, account_id, tried)) is not None:
+        tried.append(email.id)
+        parsed = fetched.pop(email.gmail_message_id, None) or fetch_message(
+            service, email.gmail_message_id
+        )
+        if parsed is None:
+            _give_up(db, email, "The message no longer exists in Gmail")
+            continue
+
+        budget -= 1
+        reason = _classify_and_apply(db, email, parsed)
+        if reason is None:
+            counts.classified += 1
+        elif email.classification_attempts >= MAX_CLASSIFICATION_ATTEMPTS:
+            _give_up(db, email, reason)
 
 
 def run_sync(db: Session, account: GmailAccount, trigger: SyncTrigger) -> SyncRun:
@@ -137,6 +255,7 @@ def run_sync(db: Session, account: GmailAccount, trigger: SyncTrigger) -> SyncRu
             run.result = result
             run.emails_seen = counts.seen
             run.emails_new = counts.new
+            run.emails_classified = counts.classified
             run.error = error
             run.finished_at = datetime.now(UTC)
             db.commit()

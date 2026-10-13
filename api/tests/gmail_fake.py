@@ -25,6 +25,21 @@ def message(message_id: str, **fields: Any) -> dict[str, Any]:
     return load_fixture("plain") | {"id": message_id, "threadId": f"thread-{message_id}"} | fields
 
 
+def mail(
+    message_id: str, sender: str, subject: str, thread_id: str | None = None, minutes: int = 0
+) -> dict[str, Any]:
+    """The plain fixture from another sender, with another subject, `minutes` after it."""
+    copy = message(message_id)
+    for header in copy["payload"]["headers"]:
+        if header["name"] == "From":
+            header["value"] = sender
+        elif header["name"] == "Subject":
+            header["value"] = subject
+    copy["threadId"] = thread_id or copy["threadId"]
+    copy["internalDate"] = str(int(copy["internalDate"]) + minutes * 60_000)
+    return copy
+
+
 class FakeRequest:
     """A Gmail API request that answers with a value or raises an error."""
 

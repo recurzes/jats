@@ -89,8 +89,8 @@ def test_sync_stores_emails_and_running_it_twice_adds_no_duplicates(
     cli.run(["sync"], db)
 
     assert capsys.readouterr().out.splitlines() == [
-        "Sync ok: 2 seen, 2 new",
-        "Sync ok: 0 seen, 0 new",
+        "Sync ok: 2 seen, 2 new, 0 classified",
+        "Sync ok: 0 seen, 0 new, 0 classified",
     ]
     assert len(db.scalars(select(Email)).all()) == 2
     assert {run.trigger for run in db.scalars(select(SyncRun))} == {SyncTrigger.MANUAL}

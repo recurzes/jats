@@ -59,6 +59,8 @@ def classify_and_store(
 
     A failure counts one attempt and leaves `processed_at` empty, so the email can be tried
     again. A provider outage is raised and counts nothing.
+
+    Flushes but never commits, so the caller can apply the result in the same transaction.
     """
     if email.processed_at is not None:
         return None
@@ -70,5 +72,5 @@ def classify_and_store(
         email.classification = result.model_dump(mode="json")
         email.confidence = result.confidence
         email.processed_at = datetime.now(UTC)
-    db.commit()
+    db.flush()
     return result
