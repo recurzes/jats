@@ -2,10 +2,34 @@ name: api
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      rollback_tag:
+        description: "Rollback: existing image tag to redeploy to production (e.g. sha-<commit>). Leave empty for a normal run."
+        required: false
+        default: ""
+
+concurrency:
+  group: api-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
-  checks:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+    steps:
+      - id: vars
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}-api" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: prepare
+    if: inputs.rollback_tag == ''
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,9 +54,9 @@ jobs:
       TEST_DATABASE_URL: postgresql+psycopg://jats:jats@localhost:5433/jats_test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
 
@@ -41,3 +65,76 @@ jobs:
       - run: uv run ruff check .
 
       - run: uv run pytest
+
+  build:
+    needs: [prepare, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ${{ needs.prepare.outputs.image }}:sha-${{ github.sha }}
+      # Ampere A1 is linux/arm64, the AMD micro is linux/amd64.
+      PLATFORM: ${{ vars.IMAGE_PLATFORM || 'linux/arm64' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: api
+          platforms: ${{ env.PLATFORM }}
+          push: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Scan image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TRIVY_PLATFORM: ${{ env.PLATFORM }}
+        with:
+          image-ref: ${{ env.IMAGE }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # Skipped until the repo variable DEPLOY_ENABLED is 'true' (see api/README.md).
+  deploy-production:
+    needs: [prepare, build]
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Deploy and smoke test
+        run: bash .github/scripts/dokploy-deploy.sh
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_APP_ID: ${{ secrets.DOKPLOY_APP_ID }}
+          HEALTH_URL: ${{ vars.HEALTH_URL }}
+          IMAGE: ${{ needs.prepare.outputs.image }}:sha-${{ github.sha }}
+
+  rollback-production:
+    needs: prepare
+    if: github.event_name == 'workflow_dispatch' && inputs.rollback_tag != ''
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Redeploy previous image and smoke test
+        run: bash .github/scripts/dokploy-deploy.sh
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_APP_ID: ${{ secrets.DOKPLOY_APP_ID }}
+          HEALTH_URL: ${{ vars.HEALTH_URL }}
+          IMAGE: ${{ needs.prepare.outputs.image }}:${{ inputs.rollback_tag }}
