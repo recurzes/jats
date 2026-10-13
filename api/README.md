@@ -55,6 +55,23 @@ One-time setup in the Neon console, under Auth: create your user, copy its id in
 
 Browsers may call the API from the origins in `CORS_ORIGINS` (comma-separated), with methods GET, POST and PATCH.
 
+## Gmail connection
+
+One-time setup in the Google Cloud console: enable the Gmail API, set up an External consent screen with the `https://www.googleapis.com/auth/gmail.readonly` scope, create a Web OAuth client whose redirect URIs are the local and deployed `/auth/google/callback`, and **publish** the app (it stays unverified). An app left in *Testing* loses its refresh token after 7 days. Then fill in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `FRONTEND_URL`, `TOKEN_ENC_KEY` and `STATE_SECRET`; `.env.example` has the commands that generate the last two.
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| GET | `/auth/google/start` | Owner only. Returns `{"url": "..."}`; the web app navigates to it |
+| GET | `/auth/google/callback` | Public; Google sends the browser here. Stores the refresh token and redirects to `FRONTEND_URL/?gmail=connected`, or `?gmail=error` |
+
+The `state` value in the URL is signed with `STATE_SECRET` and lasts 10 minutes; the callback trusts nothing else. The refresh token is stored encrypted with `TOKEN_ENC_KEY` and never logged. If it leaks, revoke it in your Google account settings. Running the flow again replaces the stored token.
+
+```sh
+uv run python -m app.cli gmail-address    # asks Gmail for the address, using the stored token
+```
+
+Until the Google values, `STATE_SECRET` and `TOKEN_ENC_KEY` are all set, `/auth/google/start` answers 503 `GMAIL_CONFIG`.
+
 ## Checks
 
 ```sh
@@ -105,6 +122,6 @@ The deploy job is skipped until the repo variable `DEPLOY_ENABLED` is `true`. Se
 | Secret | `MIGRATION_DATABASE_URL` | production database URL, starting `postgresql+psycopg://` |
 | Variable | `HEALTH_URL` | `https://<api-domain>/health` |
 
-In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID` and `CORS_ORIGINS` set as env vars.
+In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` and `FRONTEND_URL` set as env vars.
 
 To roll back: Actions > api > Run workflow, and put an older tag such as `sha-<commit>` in `rollback_tag`.
