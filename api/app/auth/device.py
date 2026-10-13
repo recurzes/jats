@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import secrets
+import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -26,6 +27,15 @@ def hash_device_key(key: str) -> str:
 
 def verify_device_key(key: str, key_hash: str) -> bool:
     return hmac.compare_digest(hash_device_key(key), key_hash)
+
+
+def register_device(db: Session, user_id: uuid.UUID, name: str) -> tuple[Device, str]:
+    """Add a device and return it with its key. The key cannot be read back later."""
+    key = generate_device_key()
+    device = Device(user_id=user_id, name=name, key_hash=hash_device_key(key))
+    db.add(device)
+    db.flush()
+    return device, key
 
 
 def require_device(
