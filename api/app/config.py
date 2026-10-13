@@ -20,6 +20,18 @@ class Settings(BaseSettings):
     # Comma-separated browser origins allowed to call the API.
     cors_origins: str = "http://localhost:5173"
 
+    # Fernet key that encrypts the Gmail refresh token at rest. Optional like the Neon Auth URL;
+    # while it is empty nothing can be encrypted or decrypted.
+    token_enc_key: str = ""
+    # Signs the `state` value of the Gmail connect flow. While it is empty no state is valid.
+    state_secret: str = ""
+
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/auth/google/callback"
+    # Where the Google callback sends the browser back to.
+    frontend_url: str = "http://localhost:5173"
+
     receipt_width: int = 32  # characters per line on 58 mm paper
     lease_seconds: int = 60
     max_attempts: int = 5

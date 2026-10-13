@@ -4,11 +4,14 @@ import argparse
 from collections.abc import Sequence
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.device import register_device
 from app.config import get_settings
 from app.db import SessionLocal
+from app.gmail.client import get_email_address, get_gmail_service
+from app.gmail.models import GmailAccount
 from app.printing import queue
 from app.printing.receipt import render_status_receipt
 
@@ -35,6 +38,15 @@ def enqueue_test(db: Session, status: str) -> None:
     print(f"Queued print job {job.id} ({job.state})")
 
 
+def gmail_address(db: Session) -> None:
+    account = db.scalar(
+        select(GmailAccount).where(GmailAccount.user_id == get_settings().owner_user_id)
+    )
+    if account is None:
+        raise SystemExit("No Gmail account is connected yet")
+    print(get_email_address(get_gmail_service(account)))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -45,6 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
     test_job = commands.add_parser("enqueue-test", help="Queue a sample receipt")
     test_job.add_argument("--status", default="REJECTED")
 
+    commands.add_parser("gmail-address", help="Ask Gmail for the connected address")
+
     return parser
 
 
@@ -52,8 +66,10 @@ def run(argv: Sequence[str] | None, db: Session) -> None:
     args = build_parser().parse_args(argv)
     if args.command == "create-device":
         create_device(db, args.name)
-    else:
+    elif args.command == "enqueue-test":
         enqueue_test(db, args.status)
+    else:
+        gmail_address(db)
 
 
 def main() -> None:

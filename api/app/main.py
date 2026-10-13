@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.errors import register_error_handlers
+from app.gmail.router import router as gmail_router
 from app.logging import RequestIdMiddleware, configure_logging
 from app.printing.device_router import router as device_router
 from app.printing.devices_router import router as devices_router
@@ -22,6 +23,7 @@ app.add_middleware(
 register_error_handlers(app)
 app.include_router(device_router)
 app.include_router(devices_router)
+app.include_router(gmail_router)
 
 
 @app.get("/health")
