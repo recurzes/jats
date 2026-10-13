@@ -34,6 +34,9 @@ class JsonFormatter(logging.Formatter):
         request_id = getattr(record, "request_id", None)
         if request_id:
             line["request_id"] = request_id
+        # Fields passed as extra={"data": {...}} sit next to the message, so they can be searched.
+        for key, value in (getattr(record, "data", None) or {}).items():
+            line.setdefault(key, value)
         if record.exc_info:
             line["exception"] = self.formatException(record.exc_info)
         return json.dumps(line, default=str)

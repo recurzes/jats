@@ -1,0 +1,43 @@
+{
+  "id": "18f0c3d4e5f6a7b8",
+  "threadId": "18f0c3d4e5f6a7b8",
+  "labelIds": [
+    "INBOX",
+    "CATEGORY_UPDATES"
+  ],
+  "snippet": "Hi Lance, Unfortunately, Initech has decided not to move forward with your application for Frontend Developer.",
+  "historyId": "5012",
+  "internalDate": "1791885600000",
+  "sizeEstimate": 9120,
+  "payload": {
+    "partId": "",
+    "mimeType": "text/html",
+    "filename": "",
+    "headers": [
+      {
+        "name": "From",
+        "value": "Indeed <no-reply@indeed.com>"
+      },
+      {
+        "name": "To",
+        "value": "me@example.com"
+      },
+      {
+        "name": "Subject",
+        "value": "An update on your application to Initech"
+      },
+      {
+        "name": "Date",
+        "value": "Tue, 13 Oct 2026 10:00:00 +0000"
+      },
+      {
+        "name": "Content-Type",
+        "value": "text/html; charset=\"UTF-8\""
+      }
+    ],
+    "body": {
+      "size": 680,
+      "data": "PCFET0NUWVBFIGh0bWw-CjxodG1sPgo8aGVhZD4KPHRpdGxlPkFwcGxpY2F0aW9uIHVwZGF0ZTwvdGl0bGU-CjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI-CiAgYm9keSB7IGZvbnQtZmFtaWx5OiBBcmlhbCwgc2Fucy1zZXJpZjsgfQogIC5idXR0b24geyBiYWNrZ3JvdW5kOiAjMjU1N2E3OyBjb2xvcjogI2ZmZmZmZjsgfQo8L3N0eWxlPgo8c2NyaXB0PndpbmRvdy50cmFjayA9IGZ1bmN0aW9uICgpIHsgcmV0dXJuICJwaXhlbCI7IH07PC9zY3JpcHQ-CjwvaGVhZD4KPGJvZHk-CjxkaXYgY2xhc3M9ImhlYWRlciI-SW5kZWVkPC9kaXY-CjxkaXY-CiAgPHA-SGkgTGFuY2UsPC9wPgogIDxwPlVuZm9ydHVuYXRlbHksIEluaXRlY2ggaGFzIGRlY2lkZWQgbm90IHRvIG1vdmUgZm9yd2FyZAogICAgIHdpdGggeW91ciBhcHBsaWNhdGlvbiBmb3IgPGI-RnJvbnRlbmQgRGV2ZWxvcGVyPC9iPi48L3A-CiAgPHA-QXBwbGllZCBvbjogMiBPY3RvYmVyIDIwMjY8YnI-TG9jYXRpb246IFJlbW90ZTwvcD4KPC9kaXY-Cjx0YWJsZT48dHI-PHRkPkpvYjwvdGQ-PHRkPkZyb250ZW5kIERldmVsb3BlcjwvdGQ-PC90cj48L3RhYmxlPgo8ZGl2IGNsYXNzPSJmb290ZXIiPllvdSBhcmUgcmVjZWl2aW5nIHRoaXMgZW1haWwgYmVjYXVzZSB5b3UgYXBwbGllZCBvbiBJbmRlZWQuPC9kaXY-CjwvYm9keT4KPC9odG1sPgo"
+    }
+  }
+}

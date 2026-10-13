@@ -1,0 +1,109 @@
+{
+  "id": "18f0b7c8d9e0f1a2",
+  "threadId": "18f0a9998887776f",
+  "labelIds": [
+    "INBOX",
+    "IMPORTANT"
+  ],
+  "snippet": "Hello Lance, We would like to invite you to an interview for the Backend Engineer role.",
+  "historyId": "4907",
+  "internalDate": "1791882000000",
+  "sizeEstimate": 48213,
+  "payload": {
+    "partId": "",
+    "mimeType": "multipart/mixed",
+    "filename": "",
+    "headers": [
+      {
+        "name": "from",
+        "value": "=?UTF-8?B?TWFyw61hIEzDs3Bleg==?= <Maria.Lopez@Globex.example>"
+      },
+      {
+        "name": "to",
+        "value": "me@example.com"
+      },
+      {
+        "name": "subject",
+        "value": "=?UTF-8?Q?Interview_invitation_=E2=80=93_Backend_Engineer?="
+      },
+      {
+        "name": "Date",
+        "value": "Tue, 13 Oct 2026 09:00:00 +0000"
+      },
+      {
+        "name": "Content-Type",
+        "value": "multipart/mixed; boundary=\"0000000000001\""
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "partId": "0",
+        "mimeType": "multipart/alternative",
+        "filename": "",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "multipart/alternative; boundary=\"0000000000002\""
+          }
+        ],
+        "body": {
+          "size": 0
+        },
+        "parts": [
+          {
+            "partId": "0.0",
+            "mimeType": "text/plain",
+            "filename": "",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain; charset=\"UTF-8\""
+              }
+            ],
+            "body": {
+              "size": 165,
+              "data": "SGVsbG8gTGFuY2UsDQoNCldlIHdvdWxkIGxpa2UgdG8gaW52aXRlIHlvdSB0byBhbiBpbnRlcnZpZXcgZm9yIHRoZSBCYWNrZW5kIEVuZ2luZWVyIHJvbGUuDQpQbGVhc2UgcGljayBhIHRpbWU6IGh0dHBzOi8vY2FsZW5kYXIuZXhhbXBsZS9nbG9iZXgNCg0KUmVnYXJkcywNCk1hcsOtYQ0K"
+            }
+          },
+          {
+            "partId": "0.1",
+            "mimeType": "text/html",
+            "filename": "",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=\"UTF-8\""
+              }
+            ],
+            "body": {
+              "size": 133,
+              "data": "PGh0bWw-PGJvZHk-PHA-SGVsbG8gTGFuY2UsPC9wPjxwPldlIHdvdWxkIGxpa2UgdG8gaW52aXRlIHlvdSB0byBhbiA8Yj5pbnRlcnZpZXc8L2I-IGZvciB0aGUgQmFja2VuZCBFbmdpbmVlciByb2xlLjwvcD48L2JvZHk-PC9odG1sPg"
+            }
+          }
+        ]
+      },
+      {
+        "partId": "1",
+        "mimeType": "text/plain",
+        "filename": "directions.txt",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "text/plain; name=\"directions.txt\""
+          },
+          {
+            "name": "Content-Disposition",
+            "value": "attachment; filename=\"directions.txt\""
+          }
+        ],
+        "body": {
+          "attachmentId": "ANGjdJ8example",
+          "size": 512
+        }
+      }
+    ]
+  }
+}

@@ -72,6 +72,34 @@ uv run python -m app.cli gmail-address    # asks Gmail for the address, using th
 
 Until the Google values, `STATE_SECRET` and `TOKEN_ENC_KEY` are all set, `/auth/google/start` answers 503 `GMAIL_CONFIG`.
 
+## Gmail sync
+
+While `SCHEDULER_ENABLED` is true, the API syncs the connected inbox every `SYNC_INTERVAL_MINUTES` (default 5), in-process. The first sync lists the last 7 days; later ones ask Gmail only for what changed since the stored history id, and fall back to the 7-day listing when that id has expired.
+
+Each new message becomes an `emails` row with its subject, sender and a snippet of at most 500 characters. The body is read for classification only and is never stored. `is_candidate` marks the emails worth an AI call: mail from a job board, or with a job keyword in the subject. Both lists are in [app/classifier/rules.py](app/classifier/rules.py).
+
+Every run leaves a `sync_runs` row:
+
+| `result` | Meaning |
+| --- | --- |
+| `ok` | Finished |
+| `fallback_full` | Finished, after the history id had expired and the last 7 days were listed again |
+| `skipped_locked` | Another sync was running; a Postgres advisory lock lets one run at a time |
+| `error` | Failed; `error` has the message. Rows saved before the failure are kept and the rest is read again next time |
+
+If Gmail refuses the refresh token, the account is marked `needs_reauth` and syncing stops until the connect flow is run again.
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| POST | `/sync` | Owner only. Starts a sync in the background and answers 202; 409 `GMAIL_NOT_CONNECTED` or `GMAIL_NEEDS_REAUTH` when there is nothing to sync |
+
+```sh
+uv run python -m app.cli gmail-count      # how many messages the inbox got in the last 7 days
+uv run python -m app.cli sync             # runs one sync now and prints the counts
+```
+
+The advisory lock needs a direct database connection, not Neon's pooled one (see `.env.example`).
+
 ## Checks
 
 ```sh
@@ -122,6 +150,6 @@ The deploy job is skipped until the repo variable `DEPLOY_ENABLED` is `true`. Se
 | Secret | `MIGRATION_DATABASE_URL` | production database URL, starting `postgresql+psycopg://` |
 | Variable | `HEALTH_URL` | `https://<api-domain>/health` |
 
-In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` and `FRONTEND_URL` set as env vars.
+In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` and `FRONTEND_URL` set as env vars. `SYNC_INTERVAL_MINUTES` and `SCHEDULER_ENABLED` are optional.
 
 To roll back: Actions > api > Run workflow, and put an older tag such as `sha-<commit>` in `rollback_tag`.

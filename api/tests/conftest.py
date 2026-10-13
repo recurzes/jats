@@ -16,6 +16,8 @@ os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
 os.environ["GOOGLE_CLIENT_SECRET"] = "test-client-secret"
 os.environ["GOOGLE_REDIRECT_URI"] = "http://localhost:8000/auth/google/callback"
 os.environ["FRONTEND_URL"] = "http://localhost:5173"
+os.environ["SYNC_INTERVAL_MINUTES"] = "5"
+os.environ["SCHEDULER_ENABLED"] = "false"
 
 from collections.abc import Callable  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402

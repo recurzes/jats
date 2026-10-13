@@ -17,6 +17,10 @@ TOKEN_URI = "https://oauth2.googleapis.com/token"
 # Gmail reports some quota errors as 403 instead of 429.
 RATE_LIMIT_REASONS = {"rateLimitExceeded", "userRateLimitExceeded"}
 
+# The first sync, and the fallback when the stored history id has expired.
+RECENT_QUERY = "newer_than:7d"
+IGNORED_LABELS = {"SPAM", "TRASH"}
+
 
 class GmailError(Exception):
     """Any failure talking to Gmail."""
@@ -36,6 +40,10 @@ class GmailRateLimitError(GmailError):
 
 class GmailServerError(GmailError):
     """Gmail failed on its side; try again later."""
+
+
+class GmailHistoryExpiredError(GmailError):
+    """The stored history id is too old for `history.list`; list recent mail instead."""
 
 
 def _from_refresh_error(exc: RefreshError) -> GmailError:
@@ -103,3 +111,64 @@ def get_gmail_service(account: GmailAccount) -> Any:
 
 def get_email_address(service: Any) -> str:
     return execute(service.users().getProfile(userId="me"))["emailAddress"]
+
+
+def get_current_history_id(service: Any) -> str:
+    """The mailbox's newest history id: the bookmark an incremental sync starts from."""
+    return str(execute(service.users().getProfile(userId="me"))["historyId"])
+
+
+def list_message_ids(service: Any, query: str = RECENT_QUERY) -> list[str]:
+    """Ids of every message matching the query, newest first. Gmail leaves out spam and trash."""
+    ids: list[str] = []
+    page_token = None
+    while True:
+        page = execute(service.users().messages().list(userId="me", q=query, pageToken=page_token))
+        ids.extend(message["id"] for message in page.get("messages", []))
+        page_token = page.get("nextPageToken")
+        if not page_token:
+            return ids
+
+
+def list_new_message_ids_since(service: Any, history_id: str) -> tuple[list[str], str]:
+    """Ids of the messages added after `history_id`, oldest first, and the newest history id."""
+    ids: dict[str, None] = {}  # a dict, to drop repeats and keep the order
+    newest = history_id
+    page_token = None
+    while True:
+        request = (
+            service.users()
+            .history()
+            .list(
+                userId="me",
+                startHistoryId=history_id,
+                historyTypes=["messageAdded"],
+                pageToken=page_token,
+            )
+        )
+        try:
+            page = execute(request)
+        except HttpError as exc:
+            if exc.status_code == 404:
+                raise GmailHistoryExpiredError("The stored Gmail history id expired") from None
+            raise
+        for record in page.get("history", []):
+            for added in record.get("messagesAdded", []):
+                message = added["message"]
+                if not IGNORED_LABELS & set(message.get("labelIds", [])):
+                    ids[message["id"]] = None
+        newest = str(page.get("historyId", newest))
+        page_token = page.get("nextPageToken")
+        if not page_token:
+            return list(ids), newest
+
+
+def get_message(service: Any, message_id: str) -> dict[str, Any] | None:
+    """The full message, or None when it was deleted after it was listed."""
+    request = service.users().messages().get(userId="me", id=message_id, format="full")
+    try:
+        return execute(request)
+    except HttpError as exc:
+        if exc.status_code == 404:
+            return None
+        raise

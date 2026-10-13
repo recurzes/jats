@@ -41,3 +41,16 @@ def test_each_request_gets_its_own_request_id(client: TestClient) -> None:
     second = client.get("/health").headers[REQUEST_ID_HEADER]
 
     assert first != second
+
+
+def test_data_fields_sit_next_to_the_message(log_stream: io.StringIO) -> None:
+    logger = logging.getLogger("app.test")
+    logger.setLevel(logging.INFO)
+
+    # A field cannot replace one of the line's own keys.
+    logger.info("Gmail sync finished", extra={"data": {"result": "ok", "level": "x"}})
+
+    line = json.loads(log_stream.getvalue().splitlines()[-1])
+    assert line["message"] == "Gmail sync finished"
+    assert line["result"] == "ok"
+    assert line["level"] == "INFO"
