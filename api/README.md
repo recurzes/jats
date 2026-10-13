@@ -42,30 +42,33 @@ uv run alembic downgrade -1
 docker build -t jats-api api          # from the repo root
 ```
 
-The container runs `alembic upgrade head` and then uvicorn on port 8000. If the migration fails, the container exits and the deploy fails.
+The container runs uvicorn on port 8000. It does not run migrations; CI does that before each deploy.
 
 ## CI/CD
 
-[.github/workflows/api.yml](../.github/workflows/api.yml) runs on pull requests and on pushes to `main`:
+[.github/workflows/api.yml](../.github/workflows/api.yml) runs when `api/` or the workflow file changes:
 
 ```
-PR             -> test (ruff + pytest)
-merge to main  -> test -> build -> push ghcr.io/<owner>/jats-api:sha-<commit> -> Trivy scan
-               -> deploy to Dokploy -> smoke test /health
-manual run     -> rollback_tag redeploys an existing sha- tag
+any push or PR  -> lint-and-test (ruff, migrations up and down, pytest) + image (build, serve /health)
+push to main    -> build -> push ghcr.io/<owner>/jats-api:sha-<commit> -> Trivy scan
+                -> migrate production -> deploy to Dokploy -> wait for Dokploy -> smoke test /health
+manual run      -> rollback_tag redeploys an existing sha- tag, without migrating
 ```
 
-The deploy job is skipped until Dokploy is set up. To turn it on, in the GitHub repo settings:
+The deploy job is skipped until the repo variable `DEPLOY_ENABLED` is `true`. Set that last, at repo level, after these are in the `production` environment (or the repo) in GitHub settings:
 
-| Where | Type | Name | Value |
-| --- | --- | --- | --- |
-| Repo | Secret | `DOKPLOY_URL` | `https://dokploy.example.com`, no trailing slash |
-| Repo | Secret | `DOKPLOY_API_KEY` | Dokploy > Settings > Profile > API/CLI |
-| Repo | Variable | `IMAGE_PLATFORM` | `linux/arm64` (default) or `linux/amd64`, matching the server |
-| Repo | Variable | `DEPLOY_ENABLED` | `true` |
-| `production` environment | Secret | `DOKPLOY_APP_ID` | the Dokploy application ID |
-| `production` environment | Variable | `HEALTH_URL` | `https://<api-domain>/health` |
+| Type | Name | Value |
+| --- | --- | --- |
+| Secret | `DOKPLOY_URL` | `https://dokploy.example.com`, no trailing slash |
+| Secret | `DOKPLOY_API_KEY` | Dokploy > Settings > Profile > API/CLI |
+| Secret | `DOKPLOY_APP_ID` | the Dokploy application ID |
+| Secret | `CF_ACCESS_CLIENT_ID` | Cloudflare Access service token id |
+| Secret | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access service token secret |
+| Secret | `GHCR_PULL_USERNAME` | GitHub username, lowercase |
+| Secret | `GHCR_PULL_TOKEN` | GitHub token with `read:packages` |
+| Secret | `MIGRATION_DATABASE_URL` | production database URL, starting `postgresql+psycopg://` |
+| Variable | `HEALTH_URL` | `https://<api-domain>/health` |
 
-In Dokploy, the application uses source type **Docker**, a GHCR registry entry with a `read:packages` token, port 8000, and `DATABASE_URL` and `ENVIRONMENT` set as env vars.
+In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL` and `ENVIRONMENT` set as env vars.
 
 To roll back: Actions > api > Run workflow, and put an older tag such as `sha-<commit>` in `rollback_tag`.

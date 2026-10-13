@@ -2,12 +2,17 @@ name: api
 
 on:
   push:
-    branches: [main]
+    paths:
+      - api/**
+      - .github/workflows/api.yml
   pull_request:
+    paths:
+      - api/**
+      - .github/workflows/api.yml
   workflow_dispatch:
     inputs:
       rollback_tag:
-        description: "Rollback: existing image tag to redeploy to production (e.g. sha-<commit>). Leave empty for a normal run."
+        description: "Rollback: existing image tag to redeploy to production (e.g. sha-1a2b3c4...). Leave empty for a normal run."
         required: false
         default: ""
 
@@ -19,16 +24,7 @@ permissions:
   contents: read
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      image: ${{ steps.vars.outputs.image }}
-    steps:
-      - id: vars
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}-api" >> "$GITHUB_OUTPUT"
-
-  test:
-    needs: prepare
+  lint-and-test:
     if: inputs.rollback_tag == ''
     runs-on: ubuntu-latest
     defaults:
@@ -46,12 +42,14 @@ jobs:
           - 5433:5432
         options: >-
           --health-cmd "pg_isready -U jats -d jats_test"
-          --health-interval 5s
+          --health-interval 2s
           --health-timeout 3s
-          --health-retries 10
+          --health-retries 15
 
     env:
+      DATABASE_URL: postgresql+psycopg://jats:jats@localhost:5433/jats_test
       TEST_DATABASE_URL: postgresql+psycopg://jats:jats@localhost:5433/jats_test
+      ENVIRONMENT: test
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,26 +57,57 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
+          cache-dependency-glob: api/uv.lock
 
-      - run: uv sync --locked
+      - name: Install
+        run: uv sync --locked
 
-      - run: uv run ruff check .
+      - name: Lint
+        run: uv run ruff check .
 
-      - run: uv run pytest
+      - name: Migrations round-trip
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
 
+      - name: Test
+        run: uv run pytest
+
+  image:
+    if: inputs.rollback_tag == ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the production image
+        run: docker build -t jats-api api
+
+      - name: The image serves /health
+        run: |
+          docker run -d --name api -p 8000:8000 \
+            -e DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/none \
+            jats-api
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:8000/health && exit 0
+            sleep 1
+          done
+          docker logs api
+          exit 1
+
+  # Build once, for the server's architecture, and push an immutable sha- tag. Never :latest.
   build:
-    needs: [prepare, test]
+    needs: [lint-and-test, image]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    env:
-      IMAGE: ${{ needs.prepare.outputs.image }}:sha-${{ github.sha }}
-      # Ampere A1 is linux/arm64, the AMD micro is linux/amd64.
-      PLATFORM: ${{ vars.IMAGE_PLATFORM || 'linux/arm64' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Image name (GHCR names are lowercase)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}-api" >> "$GITHUB_ENV"
+
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -86,55 +115,119 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: api
-          platforms: ${{ env.PLATFORM }}
+          platforms: linux/arm64 # the Oracle Ampere A1 server
           push: true
-          tags: ${{ env.IMAGE }}
+          tags: ${{ env.IMAGE }}:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
       - name: Scan image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-          TRIVY_PLATFORM: ${{ env.PLATFORM }}
+          TRIVY_PLATFORM: linux/arm64
         with:
-          image-ref: ${{ env.IMAGE }}
+          image-ref: ${{ env.IMAGE }}:sha-${{ github.sha }}
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
 
+  # Deploys the image just built, or, when rollback_tag is set, an older one (no migration).
   # Skipped until the repo variable DEPLOY_ENABLED is 'true' (see api/README.md).
-  deploy-production:
-    needs: [prepare, build]
-    if: vars.DEPLOY_ENABLED == 'true'
+  deploy:
+    needs: build
+    if: ${{ !cancelled() && vars.DEPLOY_ENABLED == 'true' && (needs.build.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.rollback_tag != '')) }}
     runs-on: ubuntu-latest
     environment: production
+    env:
+      DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+      DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+      DOKPLOY_APP_ID: ${{ secrets.DOKPLOY_APP_ID }}
+      # The Dokploy host sits behind Cloudflare Access; a service token lets CI through.
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Deploy and smoke test
-        run: bash .github/scripts/dokploy-deploy.sh
-        env:
-          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
-          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
-          DOKPLOY_APP_ID: ${{ secrets.DOKPLOY_APP_ID }}
-          HEALTH_URL: ${{ vars.HEALTH_URL }}
-          IMAGE: ${{ needs.prepare.outputs.image }}:sha-${{ github.sha }}
+        if: inputs.rollback_tag == ''
 
-  rollback-production:
-    needs: prepare
-    if: github.event_name == 'workflow_dispatch' && inputs.rollback_tag != ''
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Redeploy previous image and smoke test
-        run: bash .github/scripts/dokploy-deploy.sh
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: inputs.rollback_tag == ''
+        with:
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      # Before the new image goes live, so a bad migration fails the run and the old version
+      # keeps serving.
+      - name: Migrate
+        if: inputs.rollback_tag == ''
+        working-directory: api
         env:
-          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
-          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
-          DOKPLOY_APP_ID: ${{ secrets.DOKPLOY_APP_ID }}
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          uv sync --locked
+          uv run alembic upgrade head
+
+      - name: Set image and deploy
+        env:
+          TAG: ${{ inputs.rollback_tag || format('sha-{0}', github.sha) }}
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          # Only a 200 counts: curl -f lets a redirect (e.g. to a login page) through.
+          post() {
+            code=$(curl -sS -o response -w '%{http_code}' -X POST "$DOKPLOY_URL/api/$1" \
+              -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+              -H "x-api-key: $DOKPLOY_API_KEY" -H "Content-Type: application/json" -d @-)
+            if [ "$code" != 200 ]; then
+              echo "Dokploy answered $code to $1"; cat response; exit 1
+            fi
+          }
+          image="ghcr.io/${GITHUB_REPOSITORY,,}-api:$TAG"
+          echo "Deploying $image"
+          jq -n --arg id "$DOKPLOY_APP_ID" --arg image "$image" \
+            --arg user "$GHCR_PULL_USERNAME" --arg token "$GHCR_PULL_TOKEN" \
+            '{applicationId: $id, dockerImage: $image, registryUrl: "ghcr.io", username: $user, password: $token}' |
+            post application.saveDockerProvider
+          jq -n --arg id "$DOKPLOY_APP_ID" '{applicationId: $id}' | post application.deploy
+
+      # application.deploy only queues the deploy, and until it finishes the old container
+      # still answers /health. Wait for Dokploy to report the outcome first.
+      - name: Wait for Dokploy
+        run: |
+          seen_running=0
+          for i in $(seq 1 60); do
+            code=$(curl -sS -o response -w '%{http_code}' \
+              "$DOKPLOY_URL/api/application.one?applicationId=$DOKPLOY_APP_ID" \
+              -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+              -H "x-api-key: $DOKPLOY_API_KEY")
+            if [ "$code" != 200 ]; then
+              echo "Dokploy answered $code to application.one"; cat response; exit 1
+            fi
+            status=$(jq -r .applicationStatus response)
+            echo "Dokploy status: $status"
+            case "$status" in
+              running) seen_running=1 ;;
+              error) echo "Dokploy reports the deploy failed"; exit 1 ;;
+              # "done" in the first 30s may still be the previous deploy.
+              done) if [ "$seen_running" = 1 ] || [ "$i" -gt 6 ]; then exit 0; fi ;;
+            esac
+            sleep 5
+          done
+          echo "Dokploy did not finish the deploy in 5 minutes"; exit 1
+
+      - name: Smoke test
+        env:
           HEALTH_URL: ${{ vars.HEALTH_URL }}
-          IMAGE: ${{ needs.prepare.outputs.image }}:${{ inputs.rollback_tag }}
+        run: |
+          for _ in $(seq 1 30); do
+            curl -fsS "$HEALTH_URL" && exit 0
+            sleep 6
+          done
+          echo "Production health check failed"; exit 1
