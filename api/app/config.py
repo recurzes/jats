@@ -1,3 +1,4 @@
+import uuid
 from functools import lru_cache
 
 from pydantic import ValidationError
@@ -9,6 +10,13 @@ class Settings(BaseSettings):
 
     database_url: str
     environment: str = "development"
+
+    # Placeholder until web auth exists; the real owner id replaces it then.
+    owner_user_id: uuid.UUID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    receipt_width: int = 32  # characters per line on 58 mm paper
+    lease_seconds: int = 60
+    max_attempts: int = 5
 
 
 class SettingsError(RuntimeError):
