@@ -6,18 +6,15 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.auth.device import generate_device_key, hash_device_key
+from app.auth.device import register_device
 from app.config import get_settings
 from app.db import SessionLocal
 from app.printing import queue
-from app.printing.models import Device
 from app.printing.receipt import render_status_receipt
 
 
 def create_device(db: Session, name: str) -> None:
-    key = generate_device_key()
-    device = Device(user_id=get_settings().owner_user_id, name=name, key_hash=hash_device_key(key))
-    db.add(device)
+    device, key = register_device(db, get_settings().owner_user_id, name)
     db.commit()
     print(f"Created device {name!r} ({device.id})")
     print("Device key, shown only this once:")

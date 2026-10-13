@@ -11,12 +11,22 @@ class Settings(BaseSettings):
     database_url: str
     environment: str = "development"
 
-    # Placeholder until web auth exists; the real owner id replaces it then.
+    # The Neon Auth URL of the project. Access tokens are checked against its public signing keys.
+    # Optional so migrations and the CLI run without it; while it is empty every token is refused.
+    neon_auth_base_url: str = ""
+    # The only user allowed in. No Neon Auth user has the placeholder id, so it locks everyone out.
     owner_user_id: uuid.UUID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    # Comma-separated browser origins allowed to call the API.
+    cors_origins: str = "http://localhost:5173"
 
     receipt_width: int = 32  # characters per line on 58 mm paper
     lease_seconds: int = 60
     max_attempts: int = 5
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 class SettingsError(RuntimeError):

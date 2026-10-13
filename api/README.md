@@ -38,6 +38,23 @@ The ESP32 sends its key in the `X-Device-Key` header and only uses these three e
 
 A claimed job that is never acked returns to the queue after `LEASE_SECONDS`. After `MAX_ATTEMPTS` claims it is marked `failed`.
 
+## Web auth
+
+Login is Neon Auth. The web app gets a token from `authClient.token()` and sends it as `Authorization: Bearer <token>`; tokens last 15 minutes. The API checks the EdDSA signature against the project's public signing keys (`NEON_AUTH_BASE_URL`), the expiry, and that the issuer and audience are the origin of that URL, then checks the user id is `OWNER_USER_ID`.
+
+| Response | Meaning |
+| --- | --- |
+| 401 `AUTH_INVALID` | Missing, expired, tampered or otherwise invalid token |
+| 403 `NOT_OWNER` | A valid token for a user who is not the owner |
+
+One-time setup in the Neon console, under Auth: create your user, copy its id into `OWNER_USER_ID`, and turn off public sign-ups.
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| POST | `/devices` | Body `{"name": "desk-esp32"}`; returns `{id, name, key}`. The key is shown only in this response |
+
+Browsers may call the API from the origins in `CORS_ORIGINS` (comma-separated), with methods GET, POST and PATCH.
+
 ## Checks
 
 ```sh
@@ -88,6 +105,6 @@ The deploy job is skipped until the repo variable `DEPLOY_ENABLED` is `true`. Se
 | Secret | `MIGRATION_DATABASE_URL` | production database URL, starting `postgresql+psycopg://` |
 | Variable | `HEALTH_URL` | `https://<api-domain>/health` |
 
-In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL` and `ENVIRONMENT` set as env vars.
+In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID` and `CORS_ORIGINS` set as env vars.
 
 To roll back: Actions > api > Run workflow, and put an older tag such as `sha-<commit>` in `rollback_tag`.
