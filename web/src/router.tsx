@@ -1,5 +1,6 @@
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import { Login } from '@/features/auth/Login'
+import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { Board } from '@/features/board/Board'
 import { AppShell } from '@/shared/components/AppShell'
 
@@ -7,7 +8,12 @@ import { AppShell } from '@/shared/components/AppShell'
 export const routes: RouteObject[] = [
   { path: '/login', element: <Login /> },
   {
-    element: <AppShell />,
+    // Every route inside the shell needs a login.
+    element: (
+      <ProtectedRoute>
+        <AppShell />
+      </ProtectedRoute>
+    ),
     children: [{ index: true, element: <Board /> }],
   },
 ]

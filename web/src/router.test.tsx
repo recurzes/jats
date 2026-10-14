@@ -1,21 +1,17 @@
-import { render, screen } from '@testing-library/react'
-import { createMemoryRouter, RouterProvider } from 'react-router'
-import { routes } from '@/router'
-
-function renderAt(path: string) {
-  render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: [path] })} />)
-}
+import { screen } from '@testing-library/react'
+import { createFakeAuth } from '@/test/fakeAuth'
+import { renderRoutes } from '@/test/renderRoutes'
 
 test('/ shows the board inside the shell', async () => {
-  renderAt('/')
+  renderRoutes('/')
 
   expect(await screen.findByText('Board placeholder.')).toBeInTheDocument()
   expect(screen.getByRole('banner')).toBeInTheDocument()
 })
 
-test('/login shows the login placeholder outside the shell', async () => {
-  renderAt('/login')
+test('/login shows the login form outside the shell', async () => {
+  renderRoutes('/login', { auth: createFakeAuth().auth })
 
-  expect(await screen.findByText('Login form placeholder.')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Log in to Jats' })).toBeInTheDocument()
   expect(screen.queryByRole('banner')).not.toBeInTheDocument()
 })
