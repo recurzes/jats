@@ -1,0 +1,48 @@
+/*
+ * Jats design tokens, taken from the mockups. Light theme only (dark mode is parked for V2).
+ * Components use the Tailwind names mapped in index.css (bg-ground, text-muted, ...), never hex codes.
+ */
+:root {
+  /* Palette */
+  --ground: #f3f4f2;
+  --surface: #ffffff;
+  --column: #e8eae6;
+  --border: #dde0dc;
+  --ink: #14181b;
+  --muted: #55606a;
+  --accent: #0f766e;
+
+  /* Status dots */
+  --status-acknowledged: #5b6b7a;
+  --status-replied: #0f766e;
+  --status-update: #b45309;
+  --status-rejected: #9f1239;
+
+  /* Needs-review banner and badge */
+  --review-fill: #fff6dc;
+  --review-border: #e3c77a;
+  --review-text: #5e3d00;
+
+  /* Status strip */
+  --good: #15803d;
+  --error: #9f1239;
+
+  /* Corners: 8 to 12 px */
+  --radius: 0.625rem;
+
+  /* shadcn/ui semantic names, pointed at the palette above */
+  --background: var(--ground);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--column);
+  --secondary-foreground: var(--ink);
+  --muted-foreground: var(--muted);
+  --destructive: var(--error);
+  --input: var(--border);
+  --ring: var(--accent);
+}
