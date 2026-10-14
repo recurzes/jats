@@ -18,9 +18,22 @@ type TokenGetter = () => string | null | Promise<string | null>
 
 let getToken: TokenGetter = () => null
 
-/** Supplies the bearer token sent with every request. Wired to the session in Phase 2. */
+/** Supplies the bearer token sent with every request. `AuthProvider` wires it to the session. */
 export function setTokenGetter(getter: TokenGetter) {
   getToken = getter
+}
+
+type AuthFailureHandler = (error: ApiError) => void
+
+let onAuthFailure: AuthFailureHandler = () => {}
+
+/** Called before throwing a 401, or a 403 `NOT_OWNER`, so the session can end. */
+export function setAuthFailureHandler(handler: AuthFailureHandler) {
+  onAuthFailure = handler
+}
+
+function isAuthFailure(error: ApiError) {
+  return error.status === 401 || error.code === 'NOT_OWNER'
 }
 
 export interface RequestOptions {
@@ -74,14 +87,15 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   const data = await readJson(response)
   if (!response.ok) {
-    if (isErrorBody(data)) {
-      throw new ApiError(data.error.code, data.error.message, response.status)
-    }
-    throw new ApiError(
-      `HTTP_${response.status}`,
-      response.statusText || `Request failed with status ${response.status}`,
-      response.status,
-    )
+    const error = isErrorBody(data)
+      ? new ApiError(data.error.code, data.error.message, response.status)
+      : new ApiError(
+          `HTTP_${response.status}`,
+          response.statusText || `Request failed with status ${response.status}`,
+          response.status,
+        )
+    if (isAuthFailure(error)) onAuthFailure(error)
+    throw error
   }
   return data as T
 }
