@@ -11,7 +11,7 @@ from app.auth.jwt import current_user
 from app.auth.oauth_state import read_state
 from app.config import get_settings
 from app.db import get_db
-from app.errors import AppError
+from app.errors import AppError, error_responses
 from app.gmail import oauth, sync
 from app.gmail.models import AccountState, SyncTrigger
 
@@ -34,13 +34,22 @@ def _back_to_frontend(result: str) -> RedirectResponse:
     return RedirectResponse(f"{frontend_url}/?gmail={result}", status_code=302)
 
 
-@router.get("/start")
+@router.get("/start", summary="Begin connecting Gmail", responses=error_responses(401, 403, 503))
 def start(user_id: Annotated[uuid.UUID, Depends(current_user)]) -> ConnectUrl:
     # JSON instead of a redirect: a browser redirect could not carry the Authorization header.
     return ConnectUrl(url=oauth.authorization_url(user_id))
 
 
-@router.get("/callback")
+@router.get(
+    "/callback",
+    summary="Finish connecting Gmail",
+    status_code=302,
+    response_class=RedirectResponse,
+    responses={
+        302: {"description": "Back to the web app, with `?gmail=connected` or `?gmail=error`"},
+        **error_responses(422),
+    },
+)
 def callback(
     db: Annotated[Session, Depends(get_db)],
     code: str | None = None,
@@ -76,7 +85,12 @@ def callback(
     return _back_to_frontend("connected")
 
 
-@sync_router.post("/sync", status_code=202)
+@sync_router.post(
+    "/sync",
+    status_code=202,
+    summary="Run a Gmail sync now",
+    responses=error_responses(401, 403, 409),
+)
 def start_sync(
     user_id: Annotated[uuid.UUID, Depends(current_user)],
     db: Annotated[Session, Depends(get_db)],
