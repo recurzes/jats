@@ -92,6 +92,12 @@ def test_classification_settings_have_defaults(monkeypatch: pytest.MonkeyPatch) 
     assert settings.max_classifications_per_run == 30
 
 
+def test_sentry_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SENTRY_DSN")
+
+    assert Settings(_env_file=None).sentry_dsn == ""
+
+
 def test_classification_settings_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("REVIEW_THRESHOLD", "0.8")
     monkeypatch.setenv("MAX_CLASSIFICATIONS_PER_RUN", "5")

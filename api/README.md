@@ -24,9 +24,11 @@ uv run uvicorn app.main:app --reload
 ```sh
 uv run python -m app.cli create-device "desk-esp32"     # prints the device key once
 uv run python -m app.cli enqueue-test --status REJECTED # queues a sample receipt
+uv run python -m app.cli list-devices                   # id, name and last poll of each device
+uv run python -m app.cli delete-device <id>             # the device's key stops working
 ```
 
-Both commands use `DATABASE_URL`, so point it at production to register the real ESP32.
+Every command uses `DATABASE_URL`, so point it at production to register the real ESP32.
 
 The ESP32 sends its key in the `X-Device-Key` header and only uses these three endpoints:
 
@@ -199,7 +201,7 @@ The deploy job is skipped until the repo variable `DEPLOY_ENABLED` is `true`. Se
 | Secret | `MIGRATION_DATABASE_URL` | production database URL, starting `postgresql+psycopg://` |
 | Variable | `HEALTH_URL` | `https://<api-domain>/health` |
 
-In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `FRONTEND_URL`, `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` set as env vars. `SYNC_INTERVAL_MINUTES`, `SCHEDULER_ENABLED`, `LLM_TIMEOUT_SECONDS`, `REVIEW_THRESHOLD` and `MAX_CLASSIFICATIONS_PER_RUN` are optional.
+In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `FRONTEND_URL`, `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` set as env vars. The [env var table](#environment-variables) lists the optional ones.
 
 To roll back: Actions > api > Run workflow, and put an older tag such as `sha-<commit>` in `rollback_tag`.
 
@@ -237,3 +239,144 @@ uv run python -m scripts.export_openapi
 ```
 
 A test fails while the committed file is out of date.
+
+## Logs and errors
+
+Every log line is one JSON object on stdout, with the `request_id` that the response carries in `X-Request-ID`. In production, read them in Dokploy under the application's Logs tab.
+
+A filter on the log handler replaces credentials with `***` before a line is written: the value of any header, field or query parameter named like a secret (`Authorization`, `X-Device-Key`, `Cookie`, and any name ending in `token`, `secret`, `password` or `api_key`), anything shaped like a token (a JWT, a device key, a Google token or authorisation code, an `sk-` key, a Fernet token, the password in a URL), and the configured values of `LLM_API_KEY`, `TOKEN_ENC_KEY`, `STATE_SECRET` and `GOOGLE_CLIENT_SECRET`. It covers the message, the `data` fields and the traceback. The access line has the path without the query string, and a failed database statement is logged without its values.
+
+Email bodies, AI prompts and AI answers are never passed to a logger. Keep it that way: log the `gmail_message_id`, not the text.
+
+While `SENTRY_DSN` is set, unhandled errors and `ERROR` log lines go to Sentry. An event keeps only the method and URL of its request: headers, cookies, the query string, the body and the local variables of stack frames are left out, and the rest goes through the same masking as the logs.
+
+```sh
+uv run python -m app.cli sentry-test      # sends one test error; needs SENTRY_DSN
+```
+
+## Runbook
+
+### Environment variables
+
+Locally they live in `api/.env`; in production, in the Dokploy application's Environment tab. `.env.example` has a comment on each. Changing one in Dokploy needs a redeploy to take effect.
+
+| Name | Production | Default | What it is |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | required | none | Neon's *direct* connection string, with the scheme `postgresql+psycopg://`. Not the pooled one |
+| `ENVIRONMENT` | `production` | `development` | A label, sent to Sentry |
+| `NEON_AUTH_BASE_URL` | required | empty | Neon console > Auth > Configuration. Empty refuses every token |
+| `OWNER_USER_ID` | required | a placeholder | Your user id, from Neon console > Auth > Users. The placeholder locks everyone out |
+| `CORS_ORIGINS` | required | `http://localhost:5173` | Comma-separated origins of the web app |
+| `TOKEN_ENC_KEY` | required | empty | Fernet key that encrypts the Gmail refresh token. Changing it means [reconnecting Gmail](#reconnect-gmail) |
+| `STATE_SECRET` | required | empty | Signs the `state` of the Gmail connect flow |
+| `GOOGLE_CLIENT_ID` | required | empty | The Web OAuth client, from the Google Cloud console |
+| `GOOGLE_CLIENT_SECRET` | required | empty | Same client |
+| `GOOGLE_REDIRECT_URI` | required | `http://localhost:8000/auth/google/callback` | `https://<api-domain>/auth/google/callback`, exactly as registered on the client |
+| `FRONTEND_URL` | required | `http://localhost:5173` | Where the Google callback sends the browser back to |
+| `LLM_BASE_URL` | optional | empty | An OpenAI-compatible API. Empty means OpenAI itself |
+| `LLM_API_KEY` | required | empty | The AI provider's key |
+| `LLM_MODEL` | required | empty | The model name, as the provider spells it |
+| `LLM_TIMEOUT_SECONDS` | optional | `30` | How long one AI call may take |
+| `SYNC_INTERVAL_MINUTES` | optional | `5` | Minutes between Gmail syncs |
+| `SCHEDULER_ENABLED` | optional | `true` | `false` stops the automatic syncs; `POST /sync` still works |
+| `REVIEW_THRESHOLD` | optional | `0.6` | A less confident result is flagged for review and not printed |
+| `MAX_CLASSIFICATIONS_PER_RUN` | optional | `30` | AI calls per sync. `0` turns classification off |
+| `SENTRY_DSN` | optional | empty | Sentry > Project settings > Client keys. Empty turns Sentry off |
+| `RECEIPT_WIDTH` | optional | `32` | Characters per receipt line; 32 is 58 mm paper |
+| `LEASE_SECONDS` | optional | `60` | A claimed job that is not acked returns to the queue after this long |
+| `MAX_ATTEMPTS` | optional | `5` | Claims before a print job is marked `failed` |
+
+`TEST_DATABASE_URL` is read by the tests only.
+
+Generate the two keys with the commands in `.env.example`. Keep a copy of every production value in a password manager: Dokploy is the only other place they exist.
+
+### Rebuild from scratch
+
+1. **Database.** Create a Neon project. Turn on Neon Auth, create your user, turn off public sign-ups, and note the Auth URL and your user id ([Web auth](#web-auth)).
+2. **Google.** Set up the OAuth client and publish the consent screen ([Gmail connection](#gmail-connection)).
+3. **Dokploy.** Create an application with source type Docker and port 8000, give it a domain, and set the env vars from the table above.
+4. **GitHub.** Add the secrets and variables in [CI/CD](#cicd), then set `DEPLOY_ENABLED` to `true`.
+5. **Deploy.** Push to `main`. The workflow migrates the database, deploys the image and checks `/health`.
+6. **Printer.** [Create a device key](#create-or-rotate-a-device-key) and flash it to the ESP32.
+7. **Gmail.** [Connect Gmail](#reconnect-gmail).
+8. **Check.** Run the [smoke test](#smoke-test).
+
+### Deploy and roll back
+
+A push to `main` that changes `api/` deploys by itself; watch it under Actions > api. A red `lint-and-test`, `image` or `build` job deploys nothing. A red `deploy` job at the *Migrate* step also deploys nothing, and the old version keeps serving.
+
+To roll back the code: Actions > api > Run workflow, with an older tag such as `sha-<commit>` in `rollback_tag`. This redeploys that image and does not touch the database.
+
+To redeploy without a code change, for example after editing an env var, press Deploy on the application in Dokploy.
+
+### Migrations in production
+
+CI runs `alembic upgrade head` against production before each deploy, so there is normally nothing to do by hand. The container never migrates.
+
+A migration must leave the previous image working, because a rollback runs old code on the new schema: add columns as nullable or with a default, and drop a column only in a later deploy than the one that stops using it.
+
+To run one by hand, from `api/` with `DATABASE_URL` set to the production database:
+
+```sh
+uv run alembic current                    # the revision the database is at
+uv run alembic upgrade head
+uv run alembic downgrade -1               # undoes the last one; loses the data it added
+```
+
+### Create or rotate a device key
+
+All from `api/`, with `DATABASE_URL` set to the production database. A key is shown once and only its hash is stored, so a lost key cannot be read back, only replaced.
+
+```sh
+uv run python -m app.cli create-device "desk-esp32"     # prints the new key
+uv run python -m app.cli list-devices
+uv run python -m app.cli delete-device <id of the old device>
+```
+
+To rotate: create a device, flash the new key to the ESP32, check that `list-devices` shows the new device polling, then delete the old one. Deleting first works too, but nothing prints until the new key is flashed. If a key leaks, delete its device straight away. The web app can also create a device, with `POST /devices`.
+
+### Reconnect Gmail
+
+Needed when `/status` shows `gmail.state` as `needs_reauth` (Google refused the refresh token: it was revoked, the Google password changed, or the consent screen was left in *Testing*), and after changing `TOKEN_ENC_KEY`, which shows up as every sync ending in `error` with a decrypt message.
+
+Press connect in the web app. Without it, ask the API for the consent URL and open the `url` it returns in a browser:
+
+```sh
+curl -H "Authorization: Bearer <token>" https://<api-domain>/auth/google/start
+```
+
+`<token>` is your access token: `await authClient.token()` in the web app's browser console. Google sends the browser back to `FRONTEND_URL/?gmail=connected`. The stored token is replaced, the account goes back to `ok`, and the next sync starts within `SYNC_INTERVAL_MINUTES`; `POST /sync` starts one now. Mail that arrived in the meantime is picked up, as long as it is less than 7 days old.
+
+If it comes back as `?gmail=error`, the log line that starts `Gmail connect failed` says why. A 503 `GMAIL_CONFIG` from `/auth/google/start` means one of the Google values, `STATE_SECRET` or `TOKEN_ENC_KEY` is missing.
+
+### The printer is offline
+
+Nothing is lost while the printer is off: receipts wait in the queue as `pending` and print in order when the ESP32 polls again.
+
+Look at `/status`:
+
+| What it shows | Meaning | What to do |
+| --- | --- | --- |
+| `device.online` is `false` | The ESP32 has not polled for 2 minutes | Check its power and Wi-Fi. If it polls and gets a 401, its key was deleted or is wrong: [create a new one](#create-or-rotate-a-device-key) |
+| `device.online` is `true`, `queue.pending` keeps growing | The ESP32 reaches the API but cannot print | Check the printer's power, its Bluetooth pairing and the paper. The `failure_reason` column of `print_jobs` has what the ESP32 reported |
+| `queue.failed` above 0 | A job was claimed `MAX_ATTEMPTS` times without printing | Fix the printer, then reprint from the board: `POST /applications/{id}/reprint` |
+
+To check the path end to end, queue a sample receipt with `uv run python -m app.cli enqueue-test`.
+
+### Smoke test
+
+```sh
+API_URL=https://<api-domain> SMOKE_TOKEN=<token> DEVICE_KEY=<key> bash scripts/smoke.sh
+```
+
+It checks one route per kind of caller: `/health` (public), `/status` (the web app, with your access token) and `/device/jobs/next` (the ESP32, with a device key), and exits 0 only when all three answer. `<token>` lasts 15 minutes.
+
+The device check is a real claim. If a job is waiting, the script claims it instead of the printer; the job returns to the queue after `LEASE_SECONDS` with one attempt used. Run it when the queue is empty, or accept the delay.
+
+### Something is wrong and it is 2am
+
+1. `curl https://<api-domain>/health`. No answer: the container is down. Look at the Dokploy logs and redeploy, or [roll back](#deploy-and-roll-back).
+2. `/status`. `last_sync.result` is `error`: `last_sync.error` has the message. `gmail.state` is `needs_reauth`: [reconnect Gmail](#reconnect-gmail). `last_sync.started_at` is old: the scheduler is not running; check `SCHEDULER_ENABLED` and restart the application.
+3. `failed_classifications` is going up, or syncs end in an AI error: run `uv run python -m app.cli llm-ping`. A refused key or an empty balance at the provider shows up here.
+4. Emails arrive but nothing prints: see [The printer is offline](#the-printer-is-offline). A card flagged `needs_review` prints nothing on purpose.
+5. Search the logs for the `request_id` of a failed response, or look in Sentry.

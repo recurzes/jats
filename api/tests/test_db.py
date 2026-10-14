@@ -1,4 +1,6 @@
+import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -24,3 +26,11 @@ def test_db_fixture_rolls_back_part_one(db: Session) -> None:
 
 def test_db_fixture_rolls_back_part_two(db: Session) -> None:
     assert db.execute(text("SELECT to_regclass('rollback_probe')")).scalar_one() is None
+
+
+def test_a_failed_statement_is_reported_without_its_values(db: Session) -> None:
+    # A value too long for its column, as an email subject could be.
+    with pytest.raises(DBAPIError) as raised:
+        db.execute(text("SELECT CAST(:subject AS varchar(3))::int"), {"subject": "Your offer"})
+
+    assert "[SQL parameters hidden" in str(raised.value)
