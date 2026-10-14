@@ -110,3 +110,32 @@ def test_llm_ping_prints_the_reply(
     cli.run(["llm-ping"], db)
 
     assert capsys.readouterr().out.strip() == '{"ok": true}'
+
+
+def test_delete_device_stops_its_key_and_keeps_its_jobs(
+    db: Session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli.run(["create-device", "old"], db)
+    cli.run(["create-device", "new"], db)
+    old = db.scalars(select(Device).where(Device.name == "old")).one()
+    db.add(PrintJob(payload={"lines": [], "cut": True}, device_id=old.id, state=JobState.CLAIMED))
+    db.commit()
+    capsys.readouterr()
+
+    cli.run(["list-devices"], db)
+    assert f"{old.id}  old  last seen never" in capsys.readouterr().out
+
+    cli.run(["delete-device", str(old.id)], db)
+
+    assert [device.name for device in db.scalars(select(Device))] == ["new"]
+    assert db.scalars(select(PrintJob)).one().device_id is None
+
+
+def test_delete_device_with_an_unknown_id(db: Session) -> None:
+    with pytest.raises(SystemExit, match="No device has the id"):
+        cli.run(["delete-device", "desk-esp32"], db)
+
+
+def test_sentry_test_needs_a_dsn(db: Session) -> None:
+    with pytest.raises(SystemExit, match="SENTRY_DSN is not set"):
+        cli.run(["sentry-test"], db)

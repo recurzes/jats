@@ -5,7 +5,12 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
 
-engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+engine = create_engine(
+    get_settings().database_url,
+    pool_pre_ping=True,
+    # A failed statement is logged without its values: those can be email subjects and snippets.
+    hide_parameters=True,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
 

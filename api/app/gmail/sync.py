@@ -29,6 +29,7 @@ from app.gmail.client import (
 )
 from app.gmail.models import AccountState, Email, GmailAccount, SyncResult, SyncRun, SyncTrigger
 from app.gmail.parse import ParsedEmail, fetch_message
+from app.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +250,8 @@ def run_sync(db: Session, account: GmailAccount, trigger: SyncTrigger) -> SyncRu
             logger.warning("Gmail sync stopped: the account has to be connected again")
         except Exception as exc:
             db.rollback()
-            error = str(exc) or type(exc).__name__
+            # /status shows this, so it is masked like a log line.
+            error = scrub(str(exc)) or type(exc).__name__
             logger.exception("Gmail sync failed")
         finally:
             run.result = result
