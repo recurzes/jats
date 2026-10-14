@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # AI calls one sync may make; the rest wait for the next run. 0 turns classification off.
     max_classifications_per_run: int = Field(default=30, ge=0)
 
+    # Where errors are reported. Empty turns Sentry off.
+    sentry_dsn: str = ""
+
     receipt_width: int = 32  # characters per line on 58 mm paper
     lease_seconds: int = 60
     max_attempts: int = 5

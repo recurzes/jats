@@ -14,10 +14,12 @@ from app.gmail.scheduler import start_scheduler
 from app.logging import RequestIdMiddleware, configure_logging
 from app.printing.device_router import router as device_router
 from app.printing.devices_router import router as devices_router
+from app.sentry import init_sentry
 from app.status.router import router as status_router
 
 configure_logging()
 settings = get_settings()  # fail at startup, not on the first request, if settings are missing
+init_sentry()
 
 
 @asynccontextmanager
