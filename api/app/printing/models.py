@@ -50,6 +50,10 @@ class PrintJob(Base):
     status_event_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("status_events.id", name="fk_print_jobs_status_event_id")
     )
+    # The application a reprint is for. Empty for every other job.
+    application_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("applications.id", name="fk_print_jobs_application_id")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
@@ -63,5 +67,10 @@ class PrintJob(Base):
             "status_event_id",
             unique=True,
             postgresql_where=text("status_event_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_print_jobs_application_id",
+            "application_id",
+            postgresql_where=text("application_id IS NOT NULL"),
         ),
     )

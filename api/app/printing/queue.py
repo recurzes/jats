@@ -13,14 +13,39 @@ from app.printing.receipt import Receipt
 # transaction as the change that caused it.
 
 
-def enqueue(db: Session, receipt: Receipt, status_event_id: uuid.UUID | None = None) -> PrintJob:
+def enqueue(
+    db: Session,
+    receipt: Receipt,
+    status_event_id: uuid.UUID | None = None,
+    application_id: uuid.UUID | None = None,
+) -> PrintJob:
     job = PrintJob(
         payload=receipt.model_dump(mode="json", exclude={"id"}),
         status_event_id=status_event_id,
+        application_id=application_id,
     )
     db.add(job)
     db.flush()
     return job
+
+
+def enqueue_reprint(db: Session, receipt: Receipt, application_id: uuid.UUID) -> PrintJob:
+    """Queue another receipt for an application, unless one is still waiting to print.
+
+    The caller holds a lock on the application row, so two requests cannot both get through.
+    """
+    waiting = db.scalar(
+        select(PrintJob.id)
+        .where(
+            PrintJob.application_id == application_id,
+            PrintJob.status_event_id.is_(None),
+            PrintJob.state == JobState.PENDING,
+        )
+        .limit(1)
+    )
+    if waiting is not None:
+        raise AppError("REPRINT_PENDING", "A reprint for this application is already queued", 409)
+    return enqueue(db, receipt, application_id=application_id)
 
 
 def to_receipt(job: PrintJob) -> Receipt:

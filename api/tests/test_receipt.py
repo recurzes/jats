@@ -79,3 +79,9 @@ def test_render_skips_an_empty_role() -> None:
 
     assert "Unknown" in texts
     assert not any(text.startswith("Role:") for text in texts)
+
+
+def test_render_without_a_confidence_has_no_match_line() -> None:
+    texts = [line.text for line in render(subject="", confidence=None).lines]
+
+    assert texts[-1] == "2026-10-13 09:05"

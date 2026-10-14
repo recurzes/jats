@@ -202,3 +202,38 @@ The deploy job is skipped until the repo variable `DEPLOY_ENABLED` is `true`. Se
 In Dokploy, the application uses source type **Docker**, port 8000, and `DATABASE_URL`, `ENVIRONMENT`, `NEON_AUTH_BASE_URL`, `OWNER_USER_ID`, `CORS_ORIGINS`, `TOKEN_ENC_KEY`, `STATE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `FRONTEND_URL`, `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` set as env vars. `SYNC_INTERVAL_MINUTES`, `SCHEDULER_ENABLED`, `LLM_TIMEOUT_SECONDS`, `REVIEW_THRESHOLD` and `MAX_CLASSIFICATIONS_PER_RUN` are optional.
 
 To roll back: Actions > api > Run workflow, and put an older tag such as `sha-<commit>` in `rollback_tag`.
+
+## Board API
+
+What the web app runs on. Every route is owner only, and the board refreshes by polling.
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| GET | `/applications` | The cards, most recently changed first. Optional filters `status` and `needs_review`; an empty value means no filter |
+| GET | `/applications/{id}` | One application with its emails and status events, both newest first. 404 `NOT_FOUND` |
+| PATCH | `/applications/{id}` | Any of `status`, `company`, `role`, `needs_review`. Returns the same body as the GET |
+| POST | `/applications/{id}/reprint` | Queues a receipt for the current status and answers 201 `{job_id}`. 409 `REPRINT_PENDING` while an earlier reprint is still waiting |
+| GET | `/status` | `last_sync`, `gmail`, `device`, `queue` and `failed_classifications`, for the status strip |
+
+A manual fix through PATCH:
+
+- A new status is recorded as a `status_events` row with `source = manual`. It prints nothing; the reprint covers that.
+- Sending a status, even the one the card already has, clears `needs_review`. Sending `needs_review` in the same request wins.
+- A new company also replaces `company_key`, so later emails match the corrected name.
+- `"role": null` clears the role. The other fields cannot be null.
+
+A reprint is a print job with no `status_event_id` and the application in `application_id`. When the current status came from an email, the receipt is the same as the first one. After a manual change it has no subject and no match line.
+
+In `/status`, `device.online` means the most recently seen device polled within the last 2 minutes. `last_sync` is the latest run that was not `skipped_locked`, and its `result` is empty while it is still running. `queue` counts `pending` and `failed` print jobs. `failed_classifications` counts the emails the classifier gave up on.
+
+## API contract
+
+Every error, whatever its status code, has the body `{"error": {"code": "...", "message": "..."}}`. `code` is stable; `message` is for a person to read.
+
+The web app reads only [../contracts/openapi.json](../contracts/openapi.json) and generates its types from it. After changing a route or a response model, write the file again and commit it:
+
+```sh
+uv run python -m scripts.export_openapi
+```
+
+A test fails while the committed file is out of date.

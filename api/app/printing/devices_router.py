@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from app.auth.device import register_device
 from app.auth.jwt import current_user
 from app.db import get_db
+from app.errors import error_responses
 
-router = APIRouter(prefix="/devices", tags=["devices"])
+router = APIRouter(prefix="/devices", tags=["devices"], responses=error_responses(401, 403))
 
 
 class DeviceCreate(BaseModel):
@@ -23,12 +24,13 @@ class DeviceCreated(BaseModel):
     key: str
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, summary="Create a device", responses=error_responses(422))
 def create_device(
     body: DeviceCreate,
     user_id: Annotated[uuid.UUID, Depends(current_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> DeviceCreated:
+    """Register a printer device. Its key is in this response and cannot be read again."""
     device, key = register_device(db, user_id, body.name)
     created = DeviceCreated(id=device.id, name=device.name, key=key)
     db.commit()

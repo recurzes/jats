@@ -1,8 +1,10 @@
 import logging
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException
 
 from app.logging import REQUEST_ID_HEADER, request_id_var
@@ -15,6 +17,40 @@ HTTP_CODES = {
     404: "NOT_FOUND",
     405: "METHOD_NOT_ALLOWED",
 }
+
+
+ERROR_DESCRIPTIONS = {
+    401: "Missing or invalid credentials",
+    403: "The token is valid, but its user is not the owner",
+    404: "No such record",
+    409: "The request conflicts with the current state",
+    422: "The request is not valid",
+    503: "A required setting is missing on the server",
+}
+
+
+class ErrorDetail(BaseModel):
+    code: str = Field(
+        description="Stable and machine-readable; branch on this.", examples=["NOT_FOUND"]
+    )
+    message: str = Field(
+        description="For a person to read. The wording may change.",
+        examples=["Application not found"],
+    )
+
+
+class ErrorResponse(BaseModel):
+    """The body of every error response, whatever the status code."""
+
+    error: ErrorDetail
+
+
+def error_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
+    """The `responses=` of a route or router, so the OpenAPI document shows the error shape."""
+    return {
+        status: {"model": ErrorResponse, "description": ERROR_DESCRIPTIONS[status]}
+        for status in statuses
+    }
 
 
 class AppError(Exception):

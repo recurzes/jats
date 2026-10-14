@@ -1,0 +1,1698 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Jats API",
+    "description": "\nThree kinds of caller:\n\n- **The web app** sends a Neon Auth token as `Authorization: Bearer <token>`. Only the owner's\n  token is accepted.\n- **The ESP32** sends its device key as `X-Device-Key`, and can only call the `/device` routes.\n- **Anyone** can call `/health`. Google sends the browser to `/auth/google/callback`.\n\nEvery error has the same body, `{\"error\": {\"code\": \"...\", \"message\": \"...\"}}`. Branch on `code`;\n`message` is for a person to read.\n",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/applications": {
+      "get": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "List applications",
+        "description": "The board's cards, the most recently changed first.",
+        "operationId": "list_applications_applications_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Status"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only applications with this status.",
+              "title": "Status"
+            },
+            "description": "Only applications with this status."
+          },
+          {
+            "name": "needs_review",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only applications that are, or are not, flagged for review.",
+              "title": "Needs Review"
+            },
+            "description": "Only applications that are, or are not, flagged for review."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApplicationSummary"
+                  },
+                  "title": "Response List Applications Applications Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token is valid, but its user is not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/applications/{application_id}": {
+      "get": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "Get one application",
+        "description": "One application with its emails and its status history, both newest first.",
+        "operationId": "get_application_applications__application_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "application_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Application Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token is valid, but its user is not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "Fix an application by hand",
+        "description": "Change any of `status`, `company`, `role` and `needs_review`.\n\nA status change is recorded as a manual status event and does not print. Sending a status\nclears `needs_review`, unless the same request sets it.",
+        "operationId": "update_application_applications__application_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "application_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Application Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token is valid, but its user is not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/applications/{application_id}/reprint": {
+      "post": {
+        "tags": [
+          "applications"
+        ],
+        "summary": "Print the receipt again",
+        "description": "Queue a receipt for the current status. 409 `REPRINT_PENDING` while an earlier reprint of\nthis application is still waiting to print.",
+        "operationId": "reprint_application_applications__application_id__reprint_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "application_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Application Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReprintQueued"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token is valid, but its user is not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "summary": "Read the state of the pipeline",
+        "description": "The last sync, the Gmail connection, the printer and the print queue.",
+        "operationId": "get_status_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token is valid, but its user is not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/auth/google/start": {
+      "get": {
+        "tags": [
+          "gmail"
+        ],
+        "summary": "Begin connecting Gmail",
+        "operationId": "start_auth_google_start_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectUrl"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token is valid, but its user is not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required setting is missing on the server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/auth/google/callback": {
+      "get": {
+        "tags": [
+          "gmail"
+        ],
+        "summary": "Finish connecting Gmail",
+        "description": "Public: Google sends the browser here, so the signed state is the only protection.\n\nThe browser is mid-navigation, so every failure goes back to the web app instead of\nanswering with a JSON error.",
+        "operationId": "callback_auth_google_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Back to the web app, with `?gmail=connected` or `?gmail=error`"
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sync": {
+      "post": {
+        "tags": [
+          "gmail"
+        ],
+        "summary": "Run a Gmail sync now",
+        "description": "Run a Gmail sync now, without waiting for the scheduler. The sync itself runs after the\nresponse, and its outcome is a `sync_runs` row.",
+        "operationId": "start_sync_sync_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStarted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token is valid, but its user is not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/devices": {
+      "post": {
+        "tags": [
+          "devices"
+        ],
+        "summary": "Create a device",
+        "description": "Register a printer device. Its key is in this response and cannot be read again.",
+        "operationId": "create_device_devices_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token is valid, but its user is not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/device/jobs/next": {
+      "get": {
+        "tags": [
+          "device"
+        ],
+        "summary": "Claim the next print job",
+        "operationId": "claim_next_job_device_jobs_next_get",
+        "parameters": [
+          {
+            "name": "x-device-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Device-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No job is waiting"
+          }
+        }
+      }
+    },
+    "/device/jobs/{job_id}/ack": {
+      "post": {
+        "tags": [
+          "device"
+        ],
+        "summary": "Mark a job printed",
+        "operationId": "ack_job_device_jobs__job_id__ack_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "x-device-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Device-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/jobs/{job_id}/fail": {
+      "post": {
+        "tags": [
+          "device"
+        ],
+        "summary": "Report a failed print",
+        "operationId": "fail_job_device_jobs__job_id__fail_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "x-device-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Device-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Check the API is up",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApplicationDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          },
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review"
+          },
+          "last_event_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Event At"
+          },
+          "last_email_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Email Subject"
+          },
+          "last_email_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Email At"
+          },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Seen At"
+          },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/EmailSummary"
+            },
+            "type": "array",
+            "title": "Emails"
+          },
+          "status_events": {
+            "items": {
+              "$ref": "#/components/schemas/StatusEventOut"
+            },
+            "type": "array",
+            "title": "Status Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "company",
+          "role",
+          "status",
+          "needs_review",
+          "last_event_at",
+          "last_email_subject",
+          "last_email_at",
+          "first_seen_at",
+          "emails",
+          "status_events"
+        ],
+        "title": "ApplicationDetail",
+        "description": "One card with what the detail panel shows. Emails and events are newest first."
+      },
+      "ApplicationPatch": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Status"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "needs_review": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs Review"
+          }
+        },
+        "type": "object",
+        "title": "ApplicationPatch",
+        "description": "A manual fix. Only the fields that are sent change."
+      },
+      "ApplicationSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          },
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review"
+          },
+          "last_event_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Event At"
+          },
+          "last_email_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Email Subject"
+          },
+          "last_email_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Email At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "company",
+          "role",
+          "status",
+          "needs_review",
+          "last_event_at",
+          "last_email_subject",
+          "last_email_at"
+        ],
+        "title": "ApplicationSummary",
+        "description": "One card on the board."
+      },
+      "ConnectUrl": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "ConnectUrl"
+      },
+      "DeviceCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "DeviceCreate"
+      },
+      "DeviceCreated": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "key"
+        ],
+        "title": "DeviceCreated"
+      },
+      "DeviceStatus": {
+        "properties": {
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "online": {
+            "type": "boolean",
+            "title": "Online"
+          }
+        },
+        "type": "object",
+        "required": [
+          "last_seen_at",
+          "online"
+        ],
+        "title": "DeviceStatus"
+      },
+      "EmailSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "from_address": {
+            "type": "string",
+            "title": "From Address"
+          },
+          "snippet": {
+            "type": "string",
+            "title": "Snippet"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Received At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subject",
+          "from_address",
+          "snippet",
+          "received_at"
+        ],
+        "title": "EmailSummary"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Stable and machine-readable; branch on this.",
+            "examples": [
+              "NOT_FOUND"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "For a person to read. The wording may change.",
+            "examples": [
+              "Application not found"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorDetail"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "description": "The body of every error response, whatever the status code."
+      },
+      "EventSource": {
+        "type": "string",
+        "enum": [
+          "ai",
+          "manual"
+        ],
+        "title": "EventSource"
+      },
+      "FailRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "bt_connect",
+              "out_of_paper",
+              "print_error",
+              "other"
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "FailRequest"
+      },
+      "GmailState": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "needs_reauth",
+          "not_connected"
+        ],
+        "title": "GmailState"
+      },
+      "GmailStatus": {
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/GmailState"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "address"
+        ],
+        "title": "GmailStatus"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "ok"
+          }
+        },
+        "type": "object",
+        "title": "Health"
+      },
+      "JobState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "claimed",
+          "printed",
+          "failed"
+        ],
+        "title": "JobState"
+      },
+      "JobStatus": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "state"
+        ],
+        "title": "JobStatus"
+      },
+      "LastSync": {
+        "properties": {
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/SyncTrigger"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "started_at",
+          "finished_at",
+          "result",
+          "trigger",
+          "error"
+        ],
+        "title": "LastSync"
+      },
+      "QueueStatus": {
+        "properties": {
+          "pending": {
+            "type": "integer",
+            "title": "Pending"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pending",
+          "failed"
+        ],
+        "title": "QueueStatus"
+      },
+      "Receipt": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ReceiptLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "cut": {
+            "type": "boolean",
+            "title": "Cut",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "lines"
+        ],
+        "title": "Receipt"
+      },
+      "ReceiptLine": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "align": {
+            "type": "string",
+            "enum": [
+              "left",
+              "center",
+              "right"
+            ],
+            "title": "Align",
+            "default": "left"
+          },
+          "bold": {
+            "type": "boolean",
+            "title": "Bold",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "ReceiptLine"
+      },
+      "ReprintQueued": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "ReprintQueued"
+      },
+      "Status": {
+        "type": "string",
+        "enum": [
+          "acknowledged",
+          "replied",
+          "update",
+          "rejected"
+        ],
+        "title": "Status"
+      },
+      "StatusEventOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Status"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to_status": {
+            "$ref": "#/components/schemas/Status"
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "email_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "from_status",
+          "to_status",
+          "source",
+          "email_id",
+          "created_at"
+        ],
+        "title": "StatusEventOut"
+      },
+      "SyncResult": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error",
+          "fallback_full",
+          "skipped_locked"
+        ],
+        "title": "SyncResult"
+      },
+      "SyncStarted": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "started"
+          }
+        },
+        "type": "object",
+        "title": "SyncStarted"
+      },
+      "SyncTrigger": {
+        "type": "string",
+        "enum": [
+          "schedule",
+          "manual"
+        ],
+        "title": "SyncTrigger"
+      },
+      "SystemStatus": {
+        "properties": {
+          "last_sync": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastSync"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gmail": {
+            "$ref": "#/components/schemas/GmailStatus"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceStatus"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueStatus"
+          },
+          "failed_classifications": {
+            "type": "integer",
+            "title": "Failed Classifications"
+          }
+        },
+        "type": "object",
+        "required": [
+          "last_sync",
+          "gmail",
+          "device",
+          "queue",
+          "failed_classifications"
+        ],
+        "title": "SystemStatus",
+        "description": "What the status strip shows."
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "applications",
+      "description": "The board: list, read, fix and reprint."
+    },
+    {
+      "name": "status",
+      "description": "What the status strip shows."
+    },
+    {
+      "name": "gmail",
+      "description": "Connecting Gmail and syncing it."
+    },
+    {
+      "name": "devices",
+      "description": "Registering a printer device."
+    },
+    {
+      "name": "device",
+      "description": "The print queue, as the ESP32 sees it."
+    },
+    {
+      "name": "health",
+      "description": "Liveness check."
+    }
+  ]
+}

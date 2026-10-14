@@ -29,13 +29,19 @@ def render_status_receipt(
     status: str,
     when: datetime,
     subject: str,
-    confidence: float,
+    confidence: float | None = None,
     width: int | None = None,
 ) -> Receipt:
-    """Lay out one status change. Every text field goes through the sanitizer."""
+    """Lay out one status change. Every text field goes through the sanitizer.
+
+    `confidence` is None for a status that was set by hand, which leaves the match line out.
+    """
     width = width or get_settings().receipt_width
     rule = ReceiptLine(text="-" * width)
-    percent = round(min(max(confidence, 0.0), 1.0) * 100)
+    match_lines = []
+    if confidence is not None:
+        percent = round(min(max(confidence, 0.0), 1.0) * 100)
+        match_lines = [ReceiptLine(text=f"match {percent}%")]
     role_lines = wrap(f"Role: {role}", width, max_lines=2) if sanitize_text(role) else []
 
     lines = [
@@ -49,6 +55,6 @@ def render_status_receipt(
         rule,
         ReceiptLine(text=when.strftime("%Y-%m-%d %H:%M")),
         *(ReceiptLine(text=text) for text in wrap(subject, width, max_lines=2)),
-        ReceiptLine(text=f"match {percent}%"),
+        *match_lines,
     ]
     return Receipt(lines=lines, cut=True)
