@@ -26,15 +26,12 @@ test('a wrong password shows one inline error', async () => {
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Wrong email or password')
   expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled()
-  expect(mock.signInWithPassword).toHaveBeenCalledWith({
-    email: 'me@example.com',
-    password: 'wrong',
-  })
+  expect(mock.signIn).toHaveBeenCalledWith('me@example.com', 'wrong')
 })
 
 test('a network failure shows the same error', async () => {
   const { mock, auth } = createFakeAuth()
-  mock.signInWithPassword.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+  mock.signIn.mockRejectedValueOnce(new TypeError('Failed to fetch'))
   renderRoutes('/login', { auth })
 
   await logIn(PASSWORD)
@@ -44,7 +41,7 @@ test('a network failure shows the same error', async () => {
 
 test('the button is disabled while waiting', async () => {
   const { mock, auth } = createFakeAuth()
-  mock.signInWithPassword.mockReturnValueOnce(new Promise(() => {}))
+  mock.signIn.mockReturnValueOnce(new Promise(() => {}))
   renderRoutes('/login', { auth })
 
   await logIn(PASSWORD)
