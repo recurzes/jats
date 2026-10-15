@@ -4,6 +4,7 @@ import { BoardError, EmptyBoard, RefreshFailed } from '@/features/board/BoardSta
 import { Column } from '@/features/board/Column'
 import { groupByStatus } from '@/features/board/groupByStatus'
 import { useApplications } from '@/features/board/useApplications'
+import { ApplicationPanel } from '@/features/detail/ApplicationPanel'
 import { SyncButton } from '@/features/status/SyncButton'
 import { PageTitle } from '@/shared/components/PageTitle'
 import { STATUS_ORDER } from '@/shared/lib/statuses'
@@ -54,6 +55,7 @@ export function Board() {
       <div className="mt-6">
         <BoardBody />
       </div>
+      <ApplicationPanel />
     </div>
   )
 }
