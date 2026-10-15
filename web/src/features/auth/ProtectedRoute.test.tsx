@@ -18,20 +18,20 @@ test('loading: shows a spinner and stays put', () => {
   const { router } = renderRoutes('/', { auth })
 
   expect(screen.getByRole('status')).toHaveTextContent('Loading')
-  expect(screen.queryByText('Board placeholder.')).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Applications' })).not.toBeInTheDocument()
   expect(router.state.location.pathname).toBe('/')
 })
 
 test('logged in: / shows the board', async () => {
   renderRoutes('/')
 
-  expect(await screen.findByText('Board placeholder.')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: 'Applications' })).toBeInTheDocument()
 })
 
 test('logged in: /login goes to /', async () => {
   const { router } = renderRoutes('/login')
 
-  expect(await screen.findByText('Board placeholder.')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: 'Applications' })).toBeInTheDocument()
   expect(router.state.location.pathname).toBe('/')
 })
 
@@ -42,7 +42,7 @@ test('a 401 sends you to /login with "Session expired"', async () => {
     ),
   )
   const { router } = renderRoutes('/')
-  await screen.findByText('Board placeholder.')
+  await screen.findByRole('heading', { level: 1, name: 'Applications' })
 
   await act(() => apiRequest('/thing').catch(() => undefined))
 

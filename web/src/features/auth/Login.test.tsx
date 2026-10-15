@@ -54,7 +54,7 @@ test('success goes to the board', async () => {
 
   await logIn(PASSWORD)
 
-  expect(await screen.findByText('Board placeholder.')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: 'Applications' })).toBeInTheDocument()
   expect(router.state.location.pathname).toBe('/')
 })
 
