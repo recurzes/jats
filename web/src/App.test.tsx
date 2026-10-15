@@ -6,5 +6,5 @@ import { createFakeAuth, fakeSession } from '@/test/fakeAuth'
 test('renders the app', async () => {
   render(<App queryClient={createQueryClient()} auth={createFakeAuth(fakeSession()).auth} />)
 
-  expect(await screen.findByRole('heading', { name: 'Jats' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Applications' })).toBeInTheDocument()
 })
