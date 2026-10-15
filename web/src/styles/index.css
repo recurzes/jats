@@ -21,6 +21,7 @@
   --color-review-text: var(--review-text);
 
   --color-good: var(--good);
+  --color-warning: var(--warning);
   --color-error: var(--error);
 
   /* shadcn/ui semantic colours */
@@ -42,10 +43,11 @@
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 
-  /* Body 14 px, small labels 12.5 px, card title 15 px */
+  /* Body 14 px, small labels 12.5 px, card title 15 px, page title 26 px */
   --text-body: 0.875rem;
   --text-label: 0.78125rem;
   --text-card-title: 0.9375rem;
+  --text-page-title: 1.625rem;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
