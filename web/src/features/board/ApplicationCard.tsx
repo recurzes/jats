@@ -1,20 +1,32 @@
 import type { ApplicationSummary } from '@/api/types'
+import { useSelectedApp } from '@/features/detail/useSelectedApp'
 import { Badge } from '@/shared/components/ui/badge'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 
 const shortDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' })
 
-/** Who, what role, and the latest email. The mockup's Printed badge is left out of V1. */
+/**
+ * Who, what role, and the latest email. The mockup's Printed badge is left out of V1.
+ * The company name is a button stretched over the whole card, so mouse and keyboard both open it.
+ */
 export function ApplicationCard({ application }: { application: ApplicationSummary }) {
-  const { company, role, needs_review, last_email_subject, last_email_at } = application
+  const { id, company, role, needs_review, last_email_subject, last_email_at } = application
+  const { open } = useSelectedApp()
   // Both are null when no email has arrived yet.
   const hasEmail = last_email_subject !== null || last_email_at !== null
 
   return (
-    <article className="rounded-lg border bg-surface p-3 shadow-xs">
+    <article className="relative rounded-lg border bg-surface p-3 shadow-xs transition-colors has-[button:hover]:border-muted">
       <div className="flex items-start justify-between gap-2">
         <h3 className="min-w-0 text-card-title leading-snug font-semibold break-words">
-          {company}
+          {/* The drag handle (branch 58) needs a higher z-index than this overlay. */}
+          <button
+            type="button"
+            onClick={() => open(id)}
+            className="cursor-pointer text-left outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+          >
+            {company}
+          </button>
         </h3>
         {needs_review && <Badge variant="review">Needs review</Badge>}
       </div>

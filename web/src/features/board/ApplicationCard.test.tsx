@@ -1,12 +1,22 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import type { ApplicationSummary } from '@/api/types'
 import { ApplicationCard } from '@/features/board/ApplicationCard'
 import { applications } from '@/mocks/fixtures'
 
-function renderCard(changes: Partial<ApplicationSummary> = {}) {
+// The card reads and writes ?app=, so it needs a router.
+function renderCardWithRouter(changes: Partial<ApplicationSummary> = {}) {
   const application = { ...applications[0], ...changes }
-  render(<ApplicationCard application={application} />)
-  return screen.getByRole('article')
+  const router = createMemoryRouter([
+    { path: '/', element: <ApplicationCard application={application} /> },
+  ])
+  render(<RouterProvider router={router} />)
+  return { card: screen.getByRole('article'), router }
+}
+
+function renderCard(changes: Partial<ApplicationSummary> = {}) {
+  return renderCardWithRouter(changes).card
 }
 
 test('renders company, role, last email subject and date from a fixture', () => {
@@ -50,5 +60,32 @@ describe('Needs review badge', () => {
     renderCard({ needs_review: false })
 
     expect(screen.queryByText('Needs review')).not.toBeInTheDocument()
+  })
+})
+
+describe('opening the panel', () => {
+  test('the company is a button that sets ?app= on click', async () => {
+    const { router } = renderCardWithRouter()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Northwind Labs' }))
+
+    expect(router.state.location.search).toBe(`?app=${applications[0].id}`)
+  })
+
+  test('Tab then Enter opens it too', async () => {
+    const { router } = renderCardWithRouter()
+
+    await userEvent.tab()
+    expect(screen.getByRole('button', { name: 'Northwind Labs' })).toHaveFocus()
+    await userEvent.keyboard('{Enter}')
+
+    expect(router.state.location.search).toBe(`?app=${applications[0].id}`)
+  })
+
+  test('the button stretches over the whole card', () => {
+    const card = renderCard()
+
+    expect(card).toHaveClass('relative')
+    expect(screen.getByRole('button')).toHaveClass('after:absolute', 'after:inset-0')
   })
 })
