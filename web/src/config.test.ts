@@ -2,8 +2,7 @@ import { readConfig } from '@/config'
 
 const fullEnv = {
   VITE_API_URL: 'http://localhost:8000/',
-  VITE_SUPABASE_URL: 'https://example.supabase.co',
-  VITE_SUPABASE_ANON_KEY: 'anon-key',
+  VITE_NEON_AUTH_URL: 'https://auth.example.com/neondb/auth',
   VITE_USE_MOCKS: 'true',
 }
 
@@ -12,8 +11,7 @@ test('reads every variable', () => {
     ok: true,
     config: {
       apiUrl: 'http://localhost:8000',
-      supabaseUrl: 'https://example.supabase.co',
-      supabaseAnonKey: 'anon-key',
+      neonAuthUrl: 'https://auth.example.com/neondb/auth',
       useMocks: true,
     },
   })
@@ -26,7 +24,7 @@ test('useMocks is false unless the value is "true"', () => {
 })
 
 test('names every missing or blank variable', () => {
-  const result = readConfig({ ...fullEnv, VITE_API_URL: undefined, VITE_SUPABASE_ANON_KEY: ' ' })
+  const result = readConfig({ ...fullEnv, VITE_API_URL: undefined, VITE_NEON_AUTH_URL: ' ' })
 
-  expect(result).toEqual({ ok: false, missing: ['VITE_API_URL', 'VITE_SUPABASE_ANON_KEY'] })
+  expect(result).toEqual({ ok: false, missing: ['VITE_API_URL', 'VITE_NEON_AUTH_URL'] })
 })

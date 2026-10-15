@@ -21,8 +21,7 @@ export default defineConfig({
     // Tests never read web/.env; the mock API answers at this URL.
     env: {
       VITE_API_URL: 'http://api.test',
-      VITE_SUPABASE_URL: 'https://example.supabase.co',
-      VITE_SUPABASE_ANON_KEY: 'test-anon-key',
+      VITE_NEON_AUTH_URL: 'https://auth.example.com/neondb/auth',
       VITE_USE_MOCKS: 'false',
     },
   },

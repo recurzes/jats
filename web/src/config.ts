@@ -1,16 +1,10 @@
-export const ENV_VARS = [
-  'VITE_API_URL',
-  'VITE_SUPABASE_URL',
-  'VITE_SUPABASE_ANON_KEY',
-  'VITE_USE_MOCKS',
-] as const
+export const ENV_VARS = ['VITE_API_URL', 'VITE_NEON_AUTH_URL', 'VITE_USE_MOCKS'] as const
 
 export type EnvVar = (typeof ENV_VARS)[number]
 
 export interface Config {
   apiUrl: string
-  supabaseUrl: string
-  supabaseAnonKey: string
+  neonAuthUrl: string
   useMocks: boolean
 }
 
@@ -24,8 +18,7 @@ export function readConfig(env: Partial<Record<EnvVar, string | undefined>>): Co
     ok: true,
     config: {
       apiUrl: env.VITE_API_URL!.replace(/\/+$/, ''),
-      supabaseUrl: env.VITE_SUPABASE_URL!,
-      supabaseAnonKey: env.VITE_SUPABASE_ANON_KEY!,
+      neonAuthUrl: env.VITE_NEON_AUTH_URL!,
       useMocks: env.VITE_USE_MOCKS === 'true',
     },
   }

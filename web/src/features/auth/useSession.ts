@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Session } from '@supabase/supabase-js'
+import type { Session } from '@/features/auth/neonAuth'
 
 export interface SessionContextValue {
   session: Session | null
