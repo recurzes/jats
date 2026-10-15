@@ -14,8 +14,15 @@ test('renders the title as the h1 with its actions', () => {
   expect(screen.getByRole('button', { name: 'Sync now' })).toBeInTheDocument()
 })
 
-test('renders without actions', () => {
-  render(<PageTitle title="Applications" />)
+test('renders without actions or meta', () => {
+  const { container } = render(<PageTitle title="Applications" />)
 
+  expect(container.firstElementChild?.children).toHaveLength(1)
   expect(screen.getByRole('heading', { level: 1 }).parentElement?.children).toHaveLength(1)
+})
+
+test('renders the meta in mono next to the title', () => {
+  render(<PageTitle title="Applications" meta="9 tracked" />)
+
+  expect(screen.getByText('9 tracked')).toHaveClass('font-mono')
 })

@@ -5,7 +5,7 @@ import { renderRoutes } from '@/test/renderRoutes'
 test('/ shows the board inside the shell', async () => {
   renderRoutes('/')
 
-  expect(await screen.findByText('Board placeholder.')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: 'Applications' })).toBeInTheDocument()
   expect(screen.getByRole('banner')).toBeInTheDocument()
 })
 
