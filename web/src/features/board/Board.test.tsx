@@ -2,6 +2,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { config } from '@/config'
 import { Board } from '@/features/board/Board'
 import { applicationsQueryKey } from '@/features/board/useApplications'
@@ -21,9 +22,10 @@ function failApplications() {
 function renderBoard() {
   // No retries, so failures show at once.
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const router = createMemoryRouter([{ path: '/', element: <Board /> }])
   const { container } = render(
     <QueryClientProvider client={queryClient}>
-      <Board />
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   )
   return { container, queryClient }
