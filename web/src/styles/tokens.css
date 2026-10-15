@@ -25,6 +25,7 @@
 
   /* Status strip */
   --good: #15803d;
+  --warning: var(--status-update);
   --error: #9f1239;
 
   /* Corners: 8 to 12 px */

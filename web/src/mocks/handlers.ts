@@ -111,6 +111,15 @@ export const miscHandlers = [
     if (db.status.gmail.state === 'needs_reauth') {
       return apiError(409, 'GMAIL_NEEDS_REAUTH', 'Gmail has to be connected again')
     }
+    // Nothing runs in the background here, so record a sync that finished at once.
+    const now = new Date().toISOString()
+    db.status.last_sync = {
+      started_at: now,
+      finished_at: now,
+      result: 'ok',
+      trigger: 'manual',
+      error: null,
+    }
     return HttpResponse.json<SyncStarted>({ status: 'started' }, { status: 202 })
   }),
 
